@@ -1,7 +1,8 @@
 # Memento Signal acceptance status
 
-Recorded: 2026-10-10. This is an interim acceptance record; it does not certify
-MVP completion.
+Updated: 2026-10-12. Product acceptance remains blocked. See
+[the full-scale findings](memento-signal-full-scale-findings.md) for the diagnosis,
+matured evaluation, technical checks, and required source correction.
 
 ## Approved carrying-cost assumption
 
@@ -30,19 +31,36 @@ Prediction completed in 228.20 seconds and published prediction set
 Maximum resident set was 9,330,753,536 bytes; reported peak memory footprint was
 23,610,941,680 bytes.
 
-Signal generation was launched with the approved rate and version. At a measured
-7 hours 49 minutes it was still CPU-active, with no final signal-set publication.
-Its completion, candidate counts, top-ten composition, and file hashes are not yet
-verified. CPU activity alone does not establish how much work remains.
+Signal generation published 130,524 candidates: 121,392 availability, 9,065 demand
+momentum, and 67 inventory imbalance. All ten displayed signals are availability.
+Published hashes, all ranks, evidence references/counts, immutable publication
+reuse, full-scale API responses, and browser queue/detail/filter behavior passed.
+The expired terminal session prevents recovering final runtime; the last recorded
+lower bound was 7 hours 49 minutes.
+
+The evaluation release ingested successfully. All initial predictions are evaluable,
+but precision at ten is 0.0. Only 2,341 of 121,392 predicted pairs have an observed
+stockout. The 0.5028-day mean absolute date error applies only to those positive
+outcomes, not the displayed ten or all predictions.
+
+Archive ingestion also passed, covering all 728 days through 2028-01-28 in ten
+canonical tables. Its measured runtime was 394.48 seconds. See the full findings
+for archive identity, validation evidence, and replay results.
+
+Source calibration fails: annual observable sales are $247.7 billion against a
+configured $125 million target. Normalized store allocation is multiplied by the
+store count a second time. That requires a separate Synthetic Data correction and
+new immutable releases; this repository did not modify source code or artifacts.
 
 ## Remaining acceptance work
 
-- Complete signal publication and inspect counts, ranking, and evidence integrity.
-- Verify natural mixed top-ten composition and the required per-type coverage.
-- Establish replay evidence for full-scale signal generation.
-- Ingest the evaluation release and evaluate the frozen initial predictions.
-- Ingest the archive release and verify archive/replay behavior.
-- Verify API/UI behavior against the full-scale published outputs.
+- Correct source calibration in Synthetic Data and repeat acceptance on a new world.
+- Resolve the product meaning of conditional commitment depletion versus observed
+  stockout prediction under continued automatic replenishment.
+- Independently recompute all signal producers for the corrected world; current
+  replay evidence verifies immutable publication reuse only.
+- Verify the controlled mixed-type fixture gate separately. The approved plan does
+  not require a mixed top ten for every full-scale dataset.
 - Address signal-generation scalability: `run_signals` queries history, calendar,
   and inbound data inside its observation loop. Bulk preparation should be tested
   for equivalent calculations and materially improved runtime.

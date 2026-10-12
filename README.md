@@ -100,3 +100,5 @@ models. See:
   the accepted Attention UI integration scope and verification criteria.
 - [`docs/handoffs/synthetic-data-memento-signal-v1.md`](docs/handoffs/synthetic-data-memento-signal-v1.md)
   for the Synthetic Data verification and full-scale release handback.
+- [`docs/handoffs/memento-signal-full-scale-findings.md`](docs/handoffs/memento-signal-full-scale-findings.md)
+  for measured acceptance results, availability dominance, and remaining v1 blockers.
