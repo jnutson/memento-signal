@@ -148,7 +148,9 @@ fix and a freshly calibrated fact world are outside the approved unchanged-slice
 
 The subsequent approved task corrects the source generator and publishes a separate
 world, then reruns the same cohort and acceptance checks. Source commit:
-`c8a92d365a8397dba36c5f35e4a18e028cd3e27e` (locally committed, not pushed).
+[`c8a92d365a8397dba36c5f35e4a18e028cd3e27e`](https://github.com/jnutson/walmart-synthetic/commit/c8a92d365a8397dba36c5f35e4a18e028cd3e27e),
+pushed on `codex/miro-brand-a-two-year`. Generated datasets remain local and ignored;
+they are not uploaded to GitHub.
 Generator version is 0.5.2; the allocation version is `normalized-store-share-v1`.
 Normalized store shares now allocate brand revenue exactly once, without the extra
 store-count multiplier. Regression tests conserve revenue for 1, 2, and 2,000 stores.
