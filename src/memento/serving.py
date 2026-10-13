@@ -82,9 +82,12 @@ class PredictionStore:
 
     def _table_files(self, release: Path, manifest: dict[str, object], table: str) -> list[str]:
         prefix = f"{table}/"
+        entries = manifest.get("files", [])
+        if not isinstance(entries,list):
+            raise ValueError("invalid canonical file inventory")
         files = [
             str(self._safe_member(release, item.get("path")))
-            for item in manifest.get("files", [])
+            for item in entries
             if isinstance(item, dict) and isinstance(item.get("path"), str) and item["path"].startswith(prefix)
         ]
         if not files:
@@ -189,7 +192,10 @@ class SignalStore:
         if manifest.get("signal_set_id") != pointer.get("signal_set_id"):
             raise ValueError("signal pointer identity mismatch")
         files = manifest.get("files")
-        if not isinstance(files, list) or {item.get("path") for item in files if isinstance(item, dict)} != {"signal.parquet", "signal_evidence.parquet"}:
+        expected_files = {"signal.parquet", "signal_evidence.parquet"}
+        if manifest.get("configuration", {}).get("supply_projection_version"):
+            expected_files.add("supply_context.parquet")
+        if not isinstance(files, list) or {item.get("path") for item in files if isinstance(item, dict)} != expected_files:
             raise ValueError("invalid signal file inventory")
         PredictionStore._validate_files(manifest_path.parent, manifest)
         return manifest_path.parent, manifest
@@ -218,6 +224,19 @@ class SignalStore:
             raise ValueError("invalid signal identity")
         release, _ = self.current_release()
         return duckdb.connect().execute("SELECT * FROM read_parquet(?) WHERE signal_id=? ORDER BY evidence_date,evidence_type,path", [str(release / "signal_evidence.parquet"), signal_id]).to_arrow_table().to_pylist()
+
+    def supply_context(self, signal_id: str) -> dict | None:
+        release, manifest = self.current_release()
+        configuration = manifest.get("configuration", {})
+        if not isinstance(configuration,dict):
+            raise ValueError("invalid signal configuration")
+        if not configuration.get("supply_projection_version"):
+            return None
+        with duckdb.connect() as connection:
+            rows = connection.execute("SELECT context FROM read_parquet(?) WHERE signal_id=?", [str(release / "supply_context.parquet"),signal_id]).fetchall()
+        if len(rows) != 1:
+            raise ValueError("exactly one supply context per signal required")
+        return json.loads(rows[0][0])
 
     def display_identities(self, signals: list[dict[str, object]]) -> dict[str, dict[str, str]]:
         _, manifest = self.current_release()

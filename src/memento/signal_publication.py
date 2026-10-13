@@ -19,13 +19,16 @@ def publish_signal_set(
     candidates: list[dict[str, object]], evidence: list[dict[str, object]], *,
     canonical_manifest: dict[str, object], data_root: Path, configuration: dict[str, object],
     reason_codes: list[str] | None = None,
+    supply_context: list[dict[str, str]] | None = None,
 ) -> Path:
     config_hash = hashlib.sha256(canonical_json(configuration)).hexdigest()
+    metric_version = "memento-signal-metrics-v1.1.0" if supply_context is not None else SIGNAL_CONTRACT_VERSION
+    ranker_version = "memento-signal-actionability-ranker-v1" if supply_context is not None else SIGNAL_RANKER_VERSION
     identity = {
         "canonical_dataset_id": canonical_manifest["dataset_id"],
         "source_manifest_hashes": canonical_manifest.get("source_manifests", {}),
-        "signal_as_of": canonical_manifest["as_of"], "metric_contract_version": SIGNAL_CONTRACT_VERSION,
-        "signal_publication_version": SIGNAL_PUBLICATION_VERSION, "ranker_version": SIGNAL_RANKER_VERSION,
+        "signal_as_of": canonical_manifest["as_of"], "metric_contract_version": metric_version,
+        "signal_publication_version": SIGNAL_PUBLICATION_VERSION, "ranker_version": ranker_version,
         "configuration_hash": config_hash,
     }
     signal_set_id = "mss_" + hashlib.sha256(canonical_json(identity)).hexdigest()
@@ -34,7 +37,7 @@ def publish_signal_set(
     if (published / "manifest.json").is_file():
         manifest = json.loads((published / "manifest.json").read_text())
         files = manifest.get("files") if isinstance(manifest, dict) else None
-        expected_paths = {"signal.parquet", "signal_evidence.parquet"}
+        expected_paths = {"signal.parquet", "signal_evidence.parquet"} | ({"supply_context.parquet"} if supply_context is not None else set())
         intact = (
             isinstance(manifest, dict)
             and manifest.get("signal_set_id") == signal_set_id
@@ -56,12 +59,15 @@ def publish_signal_set(
     if any(not required_rank_fields <= row.keys() for row in candidates):
         raise ValueError("signal publication requires pre-ranked candidates")
     for row in candidates:
-        row.update(metric_contract_version=SIGNAL_CONTRACT_VERSION, signal_publication_version=SIGNAL_PUBLICATION_VERSION, ranker_version=SIGNAL_RANKER_VERSION, configuration_hash=config_hash)
+        row.update(metric_contract_version=metric_version, signal_publication_version=SIGNAL_PUBLICATION_VERSION, ranker_version=ranker_version, configuration_hash=config_hash)
     stage = data_root.resolve() / "staging" / ("run_" + uuid.uuid4().hex) / "signals"
     try:
         stage.mkdir(parents=True)
         files = []
-        for name, rows, schema in (("signal.parquet", candidates, SIGNAL_SCHEMA), ("signal_evidence.parquet", evidence, EVIDENCE_SCHEMA)):
+        tables = [("signal.parquet", candidates, SIGNAL_SCHEMA), ("signal_evidence.parquet", evidence, EVIDENCE_SCHEMA)]
+        if supply_context is not None:
+            tables.append(("supply_context.parquet", supply_context, pa.schema([("signal_id", pa.string()), ("context", pa.string())])))
+        for name, rows, schema in tables:
             target = stage / name
             table = pa.Table.from_pylist(rows, schema=schema)
             pq.write_table(table, target, compression="zstd", row_group_size=122_880)

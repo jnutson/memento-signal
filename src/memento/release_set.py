@@ -156,6 +156,34 @@ def validate_release_set(inventory: ReleaseSetInventory, *, now: datetime | None
     check(s.get("configuration_hash") == wm.get("configuration_hash") == ext.get("configuration_hash"), "SET_CONFIGURATION_BINDING", "configuration hashes match")
     check(s.get("contract_versions") == wm.get("contract_versions") == ext.get("contract_versions"), "SET_CONTRACT_BINDING", "controlling contract versions match")
     check(s.get("contract_versions") == EXPECTED_CONTRACT_VERSIONS, "SET_CONTRACT_VERSIONS", "accepted controlling contract versions")
+    if s.get("slice") is not None:
+        profile = s["slice"]
+        keys = {"version","parent_manifest_sha256","stores","items","core_start","core_end","model_sha256"}
+        shape = isinstance(profile,dict) and set(profile)==keys and profile.get("version")=="unchanged-retail-slice-v1"
+        if shape:
+            shape = all(isinstance(profile.get(name),str) and bool(HEX64.fullmatch(profile[name])) for name in ("parent_manifest_sha256","model_sha256"))
+            shape = shape and all(isinstance(profile.get(name),list) and bool(profile[name]) and
+                all(type(value) is int and value>=0 for value in profile[name]) and len(profile[name])==len(set(profile[name])) for name in ("stores","items"))
+            try:
+                shape = shape and datetime.fromisoformat(profile["core_start"])<=datetime.fromisoformat(profile["core_end"])
+            except (ValueError,TypeError,KeyError):
+                shape = False
+        check(bool(shape),"SET_SLICE_PROFILE","valid bounded slice identity")
+        try:
+            reference = s.get("supply_model")
+            if not isinstance(reference,dict) or set(reference)!={"path","sha256"} or not shape or reference["sha256"]!=profile["model_sha256"]:
+                raise ValueError("invalid model reference")
+            release_root=inventory.manifest_path.parent.parent.parent.resolve(strict=True)
+            model_path=_safe_reference(release_root,reference["path"],"SET_MODEL_PATH")
+            if (release_root/reference["path"]).absolute()!=model_path:
+                raise ValueError("symlinked model reference")
+            if model_path.stat().st_size>256*1024 or inventory.walmart.classification!="synthetic":
+                raise ValueError("invalid synthetic model boundary")
+            from .supply import load_model
+            load_model(model_path,datetime.fromisoformat(str(s["as_of"]).replace("Z","+00:00")).date(),reference["sha256"])
+            check(True,"SET_SUPPLY_MODEL","hashed effective synthetic supply model")
+        except (ValueError,TypeError,KeyError,OSError):
+            check(False,"SET_SUPPLY_MODEL","hashed effective synthetic supply model")
     wm_names = {d.get("dataset_name") for d in wm.get("datasets", []) if isinstance(d, dict)}
     ext_names = {d.get("dataset_name") for d in ext.get("datasets", []) if isinstance(d, dict)}
     check(wm_names == WALMART_DATASETS, "SET_WALMART_DATASETS", "exact six Walmart datasets")

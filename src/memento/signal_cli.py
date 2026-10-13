@@ -13,8 +13,9 @@ def main() -> None:
     parser.add_argument("--data-root", type=Path, default=Path("data"))
     parser.add_argument("--annual-carrying-cost-rate", type=Decimal, required=True)
     parser.add_argument("--carrying-rate-version", required=True)
+    parser.add_argument("--supply-model", type=Path)
     args = parser.parse_args()
-    print(run_signals(args.canonical_root, data_root=args.data_root, annual_carrying_cost_rate=args.annual_carrying_cost_rate, carrying_rate_version=args.carrying_rate_version))
+    print(run_signals(args.canonical_root, data_root=args.data_root, annual_carrying_cost_rate=args.annual_carrying_cost_rate, carrying_rate_version=args.carrying_rate_version, supply_model_path=args.supply_model))
 
 
 if __name__ == "__main__":

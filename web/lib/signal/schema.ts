@@ -38,6 +38,8 @@ export const signalQueueSchema = z.strictObject({
     display_count: z.number().int().min(0).max(10), candidate_counts_by_type: z.record(signalType, z.number().int().nonnegative()),
     canonical_dataset_id: z.string(), source_release_set_id: z.string(), source_release_ids: z.array(z.string()),
     metric_contract_version: z.string(), signal_publication_version: z.string(), ranker_version: z.string(), configuration_hash: z.string(),
+    calibration_status: z.string().nullable().optional(),
+    supply_projection_counts: z.record(z.string(), z.number().int().nonnegative()).nullable().optional(),
   }),
   signals: z.array(signalSchema).max(10),
 }).superRefine((value, context) => {
@@ -56,10 +58,33 @@ const evidence = z.strictObject({
   scheduled_inbound_units: money, opening_units: money, ending_units: money, lost_units: money, target_units: money,
 });
 
+const arrival = z.strictObject({ order_state: z.enum(["open", "in_transit", "planned"]).default("planned"), quantity: z.number().nonnegative(), basis: z.string(), early: z.iso.date().nullable(), typical: z.iso.date().nullable(), conservative: z.iso.date().nullable(), stages: z.array(z.string()) });
+const supplyContext = z.strictObject({
+  assumption_version: z.string(), classification: z.literal("synthetic_assumption"), calibration: z.string(), route: z.string(), category: z.string(),
+  arrivals: z.array(arrival), planned_replenishment: z.array(arrival.extend({ planned_order_date: z.iso.date(), stages: z.array(z.string()).default([]) })),
+  supply_timing: z.record(z.enum(["committed", "early", "typical", "conservative"]), z.strictObject({ first_oos_date: z.iso.date().nullable(), lost_units: z.number().nonnegative() })),
+  planning_prerequisites: z.array(z.string()),
+  actions: z.array(z.strictObject({ action: z.string(), early_days: z.number().int().nonnegative(), typical_days: z.number().int().nonnegative(), conservative_days: z.number().int().nonnegative(), typical_slack: z.number().int(), conservative_slack: z.number().int(), timing: z.enum(["robust", "conditional", "too_late"]), feasibility: z.enum(["robust", "conditional", "too_late", "unknown", "not_applicable"]), missing_prerequisites: z.array(z.string()), score: z.number().min(0).max(1), stages: z.array(z.string()) })),
+  legacy_reaction_score: score, legacy_reaction_days: z.number().int().nonnegative(), legacy_availability_present: z.boolean(), ranking_policy: z.string(),
+  committed_overall_rank: z.number().int().positive().nullable().optional(), committed_rank_score: score.nullable().optional(),
+}).superRefine((value, context) => {
+  for (const row of [...value.arrivals, ...value.planned_replenishment]) {
+    const dates = [row.early, row.typical, row.conservative];
+    if (!(dates.every((day) => day === null) || dates.every((day) => day !== null) && row.early! <= row.typical! && row.typical! <= row.conservative!)) context.addIssue({ code: "custom", path: ["arrivals"], message: "Arrival ranges must be complete and ordered" });
+  }
+  for (const plan of value.planned_replenishment) {
+    if (plan.early === null || plan.typical === null || plan.conservative === null || plan.planned_order_date > plan.early) context.addIssue({ code: "custom", path: ["planned_replenishment"], message: "Planned receipt dates must follow order date" });
+  }
+  for (const action of value.actions) {
+    if (!(action.early_days <= action.typical_days && action.typical_days <= action.conservative_days) || action.missing_prerequisites.length > 0 && action.score !== 0 || ["unknown", "not_applicable", "too_late"].includes(action.feasibility) && action.score !== 0) context.addIssue({ code: "custom", path: ["actions"], message: "Action timing and prerequisites must reconcile" });
+  }
+});
+
 export const signalDetailSchema = z.strictObject({
   api_contract_version: z.literal(SIGNAL_API_CONTRACT_VERSION),
   signal: signalObjectSchema.extend({ signal_as_of: z.iso.datetime({ offset: true }), company_id: z.string(), brand_id: z.string(), forecast_quality: score, data_completeness: score, stability_score: score, source_release_ids: z.array(z.string()), source_release_set_id: z.string(), canonical_dataset_id: z.string(), metric_contract_version: z.string(), signal_publication_version: z.string(), ranker_version: z.string(), configuration_hash: z.string() }).superRefine(validateSignalFields),
   evidence: z.array(evidence),
+  supply_context: supplyContext.nullable().optional(),
 }).superRefine((value, context) => {
   if (value.evidence.some((row) => row.signal_id !== value.signal.signal_id)) context.addIssue({ code: "custom", path: ["evidence"], message: "Evidence identity must match signal" });
   if (value.signal.signal_type === "demand_momentum") {
