@@ -8,27 +8,29 @@ confidence provide a common rank. The legacy OOS artifact remains readable.
 
 The current fast-iteration profile uses **10 existing items, 1,000 existing stores,
 and 182 core days**, plus a separate 28-day evaluation window. Facts are an unchanged
-slice of the existing simulation. Stage lead times, arrival ranges, planned supply,
+slice of the corrected immutable simulation. Annual sales/ASP scale is validated;
+historical mis-scaled releases remain untouched. Stage lead times, arrival ranges, planned supply,
 and action prerequisites are versioned synthetic assumptions. See the
 [supply contract](docs/plans/small-slice-supply-contract.md) and
 [acceptance report](docs/handoffs/small-slice-supply-acceptance.md).
 
-For the published engineering slice:
+For the published corrected-scale engineering slice:
 
 ```bash
 .venv/bin/memento-signal \
-  data/iteration/canonical/mds_5657bff6c5a15a3ed80d9b0b8165decc9ca3b234f327655b6ac662c77dbe1cad \
-  --data-root data/iteration --annual-carrying-cost-rate 0.25 \
+  data/iteration-calibrated/canonical/mds_ea0495deed591497bb8d841cbf0cd2b6b53b28c5a67df9c9318884c4abf0faae \
+  --data-root data/iteration-calibrated --annual-carrying-cost-rate 0.25 \
   --carrying-rate-version synthetic-toy-retail-benchmark-v1 \
-  --supply-model '/Users/mininutson/Desktop/Synthetic Data/releases/miro_iteration/a43806574dac9dc9-20270130T120000Z/supply_model.json'
-.venv/bin/memento-serve --data-root data/iteration
+  --supply-model '/Users/mininutson/Desktop/Synthetic Data/releases/miro_iteration_calibrated_v1/f445d45980851282-20270130T120000Z/supply_model.json'
+.venv/bin/memento-serve --data-root data/iteration-calibrated
 ```
 
 The source slice publisher is documented in Synthetic Data's
 `docs/memento-iteration-slice.md`. Supply-aware runs preserve the legacy committed
 comparator and expose before/after ranks. Unknown stock, capacity, or authority
-never becomes a confirmed actionable recommendation. The parent economic scaling
-defect is retained and flagged in the UI; this slice is for engineering iteration.
+never becomes a confirmed actionable recommendation. Sales-scale validation does
+not establish calibrated demand paths, operational lead times, or commercial readiness.
+The acceptance report retains the original mis-scaled run and the corrected rerun.
 
 ```bash
 python -m venv .venv

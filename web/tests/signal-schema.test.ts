@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { signalDetailSchema } from "@/lib/signal/schema";
+import { calibrationNotice, signalDetailSchema } from "@/lib/signal/schema";
 
 const signalId = `sig_${"a".repeat(64)}`;
 const signal = {
@@ -26,6 +26,13 @@ const evidence = (["low", "base", "high"] as const).flatMap((path) => Array.from
 })));
 
 describe("Memento Signal runtime contract", () => {
+  it("distinguishes corrected sales scale from operational calibration", () => {
+    expect(calibrationNotice("engineering_only_sales_scale_validated_lead_times_assumed")).toContain("annual retail-sales scale is validated");
+    expect(calibrationNotice("engineering_only_sales_scale_validated_lead_times_assumed")).not.toContain("known calibration defect");
+    expect(calibrationNotice("engineering_only_parent_economics_miscalibrated")).toContain("known calibration defect");
+    expect(calibrationNotice("unrecognized")).toContain("not verified");
+    expect(calibrationNotice(null)).toBeNull();
+  });
   it("accepts complete type-specific evidence", () => {
     expect(signalDetailSchema.safeParse({ api_contract_version: "memento-signal-api-v1", signal, evidence }).success).toBe(true);
   });

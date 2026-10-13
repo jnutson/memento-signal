@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { fetchSignalDetail, fetchSignalQueue } from "@/lib/signal/client";
+import { calibrationNotice } from "@/lib/signal/schema";
 import type { SignalDetail, SignalQueue, SignalRow, SignalType } from "@/lib/signal/schema";
 import styles from "@/components/attention/Attention.module.css";
 
@@ -22,7 +23,7 @@ export default function SignalView() {
   return <div className={styles.page}>
     <header className={styles.pageHeader}><div><p className={styles.eyebrow}>Immutable overall top ten</p><h1>Memento Signal</h1></div><div className={styles.runMeta}><span>Cutoff {new Date(queue.run.signal_as_of).toLocaleString("en-US", { timeZone: "UTC", timeZoneName: "short" })}</span><span>{queue.run.metric_contract_version}</span></div></header>
     <section className={styles.summary} aria-label="Signal run summary"><Summary label="Eligible signals" value={String(queue.run.candidate_count)} /><Summary label="Displayed overall top ten" value={String(queue.run.display_count)} /><Summary label="Availability" value={String(queue.run.candidate_counts_by_type.availability)} /><Summary label="Demand momentum" value={String(queue.run.candidate_counts_by_type.demand_momentum)} /><Summary label="Inventory imbalance" value={String(queue.run.candidate_counts_by_type.inventory_imbalance)} /></section>
-    {queue.run.calibration_status && <p role="note">Engineering slice: parent sales and inventory retain a known calibration defect. Economic amounts are not calibrated business estimates.</p>}
+    {queue.run.calibration_status && <p role="note">{calibrationNotice(queue.run.calibration_status)}</p>}
     {queue.run.supply_projection_counts && <section aria-label="Supply assumption comparison"><h2>Supply assumptions change projected shortages</h2><p>Store–item pairs with at least one projected lost unit: {Object.entries(queue.run.supply_projection_counts).map(([name, count]) => `${name}: ${count}`).join(" · ")}. Planned replenishment is an assumption, not a firm order.</p></section>}
     <div className={styles.legend} aria-label="Signal type filter"><button aria-pressed={!filter} onClick={() => setFilter(undefined)}>All types</button>{(Object.keys(labels) as SignalType[]).map((type) => <button key={type} aria-pressed={filter === type} onClick={() => setFilter(type)}>{labels[type]}</button>)}</div>
     <div className={styles.workspace}><section className={styles.panel}><div className={styles.panelHeader}><div><p className={styles.eyebrow}>Ranked queue</p><h2>Signals retain overall rank when filtered</h2></div></div><div className={styles.definitionList}>{queue.signals.map((signal) => <button key={signal.signal_id} onClick={() => { setSelected(signal); setDetail(null); }} style={{ textAlign: "left", padding: "1rem", border: "1px solid #ddd", background: selected?.signal_id === signal.signal_id ? "#eef5ff" : "white" }}><strong>#{signal.overall_rank_position} · {labels[signal.signal_type]}</strong><br />{signal.identity.store_name} · {signal.identity.item_name}<br /><span>{signal.signal_direction} · type rank #{signal.signal_type_rank_position} · {number(signal.headline_metric_value)} {signal.headline_metric_name.replaceAll("_", " ")}</span></button>)}</div></section>
