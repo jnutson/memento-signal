@@ -32,6 +32,13 @@ never becomes a confirmed actionable recommendation. Sales-scale validation does
 not establish calibrated demand paths, operational lead times, or commercial readiness.
 The acceptance report retains the original mis-scaled run and the corrected rerun.
 
+The restored frontend opens at `/attention` (also the home-page destination): its
+3D scene, ranked OOS baseline, selection cards, and planning/evidence drill-down
+remain backed by the published prediction artifacts. The sidebar also links to
+`/signal` for the newer supply-aware three-signal queue. These are distinct published
+views, not interchangeable ranks. Overview, Forecast, standalone Plan and Reports
+were never imported; restoring those requires the original prototype source.
+
 ```bash
 python -m venv .venv
 .venv/bin/pip install -e '.[dev]'

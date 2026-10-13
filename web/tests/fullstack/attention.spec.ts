@@ -1,5 +1,23 @@
 import { expect, test } from "@playwright/test";
 
+test("restores the real Attention queue and planning evidence", async ({ page }) => {
+  const responsePromise = page.waitForResponse((response) => response.url().endsWith("/api/attention"));
+  await page.goto("/attention");
+  const response = await responsePromise;
+  expect(response.ok()).toBe(true);
+  const queue = await response.json();
+  expect(queue.predictions).toHaveLength(1);
+  await expect(page.getByRole("heading", { name: "Attention", exact: true })).toBeVisible();
+  await expect(page.getByTestId("attention-scene").locator("canvas")).toBeVisible();
+  await page.getByRole("button", { name: /Demo Item/ }).click();
+  await page.getByRole("button", { name: "Open planning context" }).click();
+  await expect(page.getByRole("heading", { name: "Daily inventory paths" })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Daily calculation evidence" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Published evidence quality" })).toBeVisible();
+  await page.getByRole("button", { name: /Attention queue/ }).click();
+  await expect(page.getByRole("button", { name: "Reset view" })).toBeVisible();
+});
+
 test("drives a published signal release through the Memento Signal workflow", async ({ page }) => {
   const browserErrors: string[] = [];
   page.on("console", (message) => {

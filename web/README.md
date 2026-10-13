@@ -1,10 +1,14 @@
 # Memento Attention web app
 
-This is the narrow Attention-only product surface for the deterministic OOS MVP. It
+The home page opens the restored **Attention** view at `/attention`. The sidebar
+also exposes **Memento Signal** at `/signal`, preserving the three-signal workflow.
+Attention is the committed-order OOS baseline, not the supply-aware Signal queue. It
 contains the ranked queue, interactive Impact/Reaction/Confidence scene, prediction
 detail, and evidence-backed planning context. It deliberately excludes recommendations,
 editable scenarios, queue mutation, and the supplied Overview, Forecast, Plan, and
-Reports panes.
+Reports panes: those were never imported into this repository, not hidden routes.
+Select a point or ranked row, then **Open planning context** to expose the existing
+inventory-path chart, calculation table, confidence, receipts, and lineage views.
 
 ```bash
 npm install

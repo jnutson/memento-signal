@@ -3,8 +3,10 @@
 .divider { color: #c7c7cc; }
 .context { color: var(--text); font-weight: 620; }
 .sidebar { padding: 16px 10px; background: var(--sidebar); border-right: 1px solid var(--border); }
-.item { display: flex; align-items: center; height: 34px; padding: 0 10px; border-radius: 7px; color: var(--text-2); font-size: 14px; }
+.item { display: flex; align-items: center; height: 34px; padding: 0 10px; border-radius: 7px; color: var(--text-2); font-size: 14px; text-decoration: none; }
 .active { background: var(--active); color: var(--text); font-weight: 620; }
+.item:hover { background: var(--active); }
+.item:focus-visible { outline: 2px solid #0a4fb0; outline-offset: 2px; }
 .main { min-width: 0; overflow: auto; padding: 26px 26px 34px; }
 @media (max-width: 760px) {
   .shell { grid-template-columns: 1fr; grid-template-rows: 42px auto minmax(0, 1fr); }

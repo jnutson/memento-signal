@@ -1,5 +1,7 @@
-import { redirect } from "next/navigation";
+import AttentionView from "@/components/attention/AttentionView";
+
+export const metadata = { title: "Memento Loop · Attention" };
 
 export default function AttentionPage() {
-  redirect("/signal");
+  return <AttentionView />;
 }

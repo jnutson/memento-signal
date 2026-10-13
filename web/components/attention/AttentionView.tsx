@@ -99,6 +99,7 @@ export default function AttentionView() {
         <div><p className={styles.eyebrow}>Current prediction run</p><h1>Attention</h1></div>
         <div className={styles.runMeta}><span>Cutoff {new Date(queue.run.prediction_as_of).toLocaleString("en-US", { timeZone: "UTC", timeZoneName: "short" })}</span><span>{queue.run.metric_contract_version}</span></div>
       </header>
+      <p className={styles.mutedCopy}>Committed-order OOS baseline · this restored view does not include assumed future replenishment. For supply-aware signals and action prerequisites, open Memento Signal.</p>
       <section className={styles.summary} aria-label="Attention run summary">
         <Summary label="Eligible candidates" value={String(queue.summary.eligible_candidate_count)} />
         <Summary label="Displayed predictions" value={String(queue.summary.displayed_prediction_count)} />
@@ -110,7 +111,7 @@ export default function AttentionView() {
         <aside className={styles.aside}>
           {selected ? (
             <PredictionCard prediction={selected} detail={detail} loading={detailLoading} error={detailError} onOpen={() => setPlanningOpen(true)} onStep={step} position={queue.predictions.findIndex((item) => item.prediction_id === selected.prediction_id) + 1} total={queue.predictions.length} />
-          ) : <div className={styles.hint}>Select a point or ranked row to inspect its published scores and planning context. Use arrow keys to step through the immutable queue.</div>}
+          ) : <div className={styles.hint}>Select a point or ranked row, then choose Open planning context to reveal inventory paths, calculation tables, scheduled receipts, and lineage. Use arrow keys to step through the immutable queue.</div>}
           <section className={styles.rankedList} aria-labelledby="ranked-title">
             <div className={styles.listHeader}><div><h2 id="ranked-title">Ranked by engine</h2><span>Impact · Reaction · Confidence</span></div></div>
             <div className={styles.listBody}>

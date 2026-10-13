@@ -4,8 +4,8 @@ import Shell from "@/components/Shell";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Memento Loop · Memento Signal",
-  description: "Evidence-backed retail signal queue",
+  title: "Memento Loop · Retail analytics",
+  description: "Interactive Attention exploration and evidence-backed retail signals",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
