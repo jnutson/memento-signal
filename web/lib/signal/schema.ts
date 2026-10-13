@@ -1,6 +1,12 @@
 import { z } from "zod";
 
 export const SIGNAL_API_CONTRACT_VERSION = "memento-signal-api-v1" as const;
+export function calibrationNotice(status: string | null | undefined): string | null {
+  if (!status) return null;
+  if (status === "engineering_only_sales_scale_validated_lead_times_assumed") return "Engineering slice: annual retail-sales scale is validated. Lead times and replenishment remain illustrative assumptions, not calibrated operational estimates.";
+  if (status === "engineering_only_parent_economics_miscalibrated") return "Engineering slice: parent sales and inventory retain a known calibration defect. Economic amounts are not calibrated business estimates.";
+  return "Engineering slice: calibration is not verified for commercial or operational decisions.";
+}
 const decimal = z.string().regex(/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/);
 const money = decimal.nullable();
 const score = decimal.refine((value) => Number(value) >= 0 && Number(value) <= 1);
