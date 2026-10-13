@@ -6,6 +6,30 @@ Availability Risk, Demand Momentum Gap, and Inventory Imbalance Exposure signals
 Signals retain native economics while type-relative impact, reaction time, and
 confidence provide a common rank. The legacy OOS artifact remains readable.
 
+The current fast-iteration profile uses **10 existing items, 1,000 existing stores,
+and 182 core days**, plus a separate 28-day evaluation window. Facts are an unchanged
+slice of the existing simulation. Stage lead times, arrival ranges, planned supply,
+and action prerequisites are versioned synthetic assumptions. See the
+[supply contract](docs/plans/small-slice-supply-contract.md) and
+[acceptance report](docs/handoffs/small-slice-supply-acceptance.md).
+
+For the published engineering slice:
+
+```bash
+.venv/bin/memento-signal \
+  data/iteration/canonical/mds_5657bff6c5a15a3ed80d9b0b8165decc9ca3b234f327655b6ac662c77dbe1cad \
+  --data-root data/iteration --annual-carrying-cost-rate 0.25 \
+  --carrying-rate-version synthetic-toy-retail-benchmark-v1 \
+  --supply-model '/Users/mininutson/Desktop/Synthetic Data/releases/miro_iteration/a43806574dac9dc9-20270130T120000Z/supply_model.json'
+.venv/bin/memento-serve --data-root data/iteration
+```
+
+The source slice publisher is documented in Synthetic Data's
+`docs/memento-iteration-slice.md`. Supply-aware runs preserve the legacy committed
+comparator and expose before/after ranks. Unknown stock, capacity, or authority
+never becomes a confirmed actionable recommendation. The parent economic scaling
+defect is retained and flagged in the UI; this slice is for engineering iteration.
+
 ```bash
 python -m venv .venv
 .venv/bin/pip install -e '.[dev]'

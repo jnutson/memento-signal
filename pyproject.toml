@@ -44,6 +44,9 @@ include = [
   "src/memento/demand_signal.py",
   "src/memento/inventory_signal.py",
   "src/memento/signals.py",
+  "src/memento/supply.py",
+  "src/memento/api.py",
+  "src/memento/serving.py",
   "tools",
 ]
 exclude = ["**/__pycache__"]

@@ -200,6 +200,9 @@ def ingest_release_set(manifest_path: Path, *, data_root: Path, classification: 
         _ensure_pass("canonical_validation", canonical_results)
         content = {
             "dataset_id": dataset_id,
+            "slice": source.manifest.get("slice"),
+            "calibration_status": source.manifest.get("calibration_status"),
+            "supply_model": source.manifest.get("supply_model"),
             "canonical_contract_version": CONTRACT_VERSION,
             "source_classification": classification,
             "source_release_set_id": source.manifest["release_id"],

@@ -12,6 +12,30 @@ from memento.orchestrator import ingest
 TABLES = {"calendar_day", "location", "product", "sales_daily", "inventory_daily", "demand_forecast_weekly", "company_item", "replenishment_commitment", "reaction_constraint", "company_item_economics"}
 
 
+def test_slice_model_reference_is_validated_and_preserved(release_set_manifest: Path, tmp_path: Path):
+    from test_supply import model_data
+    root=release_set_manifest.parents[2]
+    model=root/"supply.json"; model.write_text(json.dumps(model_data()))
+    digest=hashlib.sha256(model.read_bytes()).hexdigest()
+    value=json.loads(release_set_manifest.read_text())
+    value.update(slice={"version":"unchanged-retail-slice-v1","parent_manifest_sha256":"a"*64,"stores":[10],"items":[100],"core_start":"2026-01-31","core_end":"2026-02-07","model_sha256":digest},supply_model={"path":"supply.json","sha256":digest})
+    release_set_manifest.write_text(json.dumps(value))
+    output=ingest(release_set_manifest,data_root=tmp_path/"data",classification="synthetic")
+    assert json.loads((output/"manifest.json").read_text())["supply_model"]["sha256"]==digest
+    model.write_text('{}')
+    with pytest.raises(IngestionFailure) as failure:
+        ingest(release_set_manifest,data_root=tmp_path/"other-data",classification="synthetic")
+    assert any(row.rule_id=="SET_SUPPLY_MODEL" and row.severity=="FAIL" for row in failure.value.results)
+
+
+def test_slice_metadata_rejects_unknown_payload_fields(release_set_manifest: Path, tmp_path: Path):
+    value=json.loads(release_set_manifest.read_text()); value["slice"]={"unexpected":"synthetic fixture"}
+    release_set_manifest.write_text(json.dumps(value))
+    with pytest.raises(IngestionFailure) as failure:
+        ingest(release_set_manifest,data_root=tmp_path/"data",classification="synthetic")
+    assert any(row.rule_id=="SET_SLICE_PROFILE" for row in failure.value.results)
+
+
 def test_release_set_publishes_ten_atomic_canonical_tables(release_set_manifest: Path, tmp_path: Path):
     output = ingest(release_set_manifest, data_root=tmp_path / "data", classification="synthetic")
     manifest = json.loads((output / "manifest.json").read_text())

@@ -4,7 +4,7 @@ import os
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Literal, cast
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -166,6 +166,8 @@ class SignalRunMetadata(WireModel):
     signal_publication_version: str
     ranker_version: str
     configuration_hash: str
+    calibration_status: str | None = None
+    supply_projection_counts: dict[str, Annotated[int, Field(ge=0)]] | None = None
 
 
 class SignalRow(WireModel):
@@ -246,10 +248,89 @@ class SignalDetailRow(SignalRow):
     configuration_hash: str
 
 
+class SupplyArrival(WireModel):
+    order_state: Literal["open", "in_transit", "planned"] = "planned"
+    quantity: Annotated[float, Field(ge=0, allow_inf_nan=False)]
+    basis: str
+    early: date | None
+    typical: date | None
+    conservative: date | None
+    stages: list[str]
+
+    @model_validator(mode="after")
+    def ordered_dates(self):
+        if any(value is None for value in (self.early,self.typical,self.conservative)):
+            if not all(value is None for value in (self.early,self.typical,self.conservative)):
+                raise ValueError("partial arrival range")
+        elif self.early is not None and self.typical is not None and self.conservative is not None and not self.early <= self.typical <= self.conservative:
+            raise ValueError("unordered arrival range")
+        return self
+
+
+class SupplyPlan(SupplyArrival):
+    planned_order_date: date
+    stages: list[str] = []
+
+    @model_validator(mode="after")
+    def complete_plan_dates(self):
+        if self.early is None or self.typical is None or self.conservative is None or self.planned_order_date > self.early:
+            raise ValueError("planned arrival range must follow order date")
+        return self
+
+
+class SupplyProjection(WireModel):
+    first_oos_date: date | None
+    lost_units: Annotated[float, Field(ge=0, allow_inf_nan=False)]
+
+
+class SupplyAction(WireModel):
+    action: str
+    early_days: Annotated[int, Field(ge=0)]
+    typical_days: Annotated[int, Field(ge=0)]
+    conservative_days: Annotated[int, Field(ge=0)]
+    typical_slack: int
+    conservative_slack: int
+    timing: Literal["robust", "conditional", "too_late"]
+    feasibility: Literal["robust", "conditional", "too_late", "unknown", "not_applicable"]
+    missing_prerequisites: list[str]
+    score: Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
+    stages: list[str]
+
+    @model_validator(mode="after")
+    def feasible_score(self):
+        if not self.early_days <= self.typical_days <= self.conservative_days:
+            raise ValueError("unordered action lead times")
+        if self.missing_prerequisites and self.score != 0:
+            raise ValueError("unknown prerequisites cannot score as actionable")
+        if self.feasibility in {"unknown","not_applicable","too_late"} and self.score != 0:
+            raise ValueError("infeasible action cannot have positive score")
+        return self
+
+
+class SupplyContext(WireModel):
+    assumption_version: str
+    classification: Literal["synthetic_assumption"]
+    calibration: str
+    route: str
+    category: str
+    arrivals: list[SupplyArrival]
+    planned_replenishment: list[SupplyPlan]
+    supply_timing: dict[Literal["committed", "early", "typical", "conservative"], SupplyProjection]
+    planning_prerequisites: list[str]
+    actions: list[SupplyAction]
+    legacy_reaction_score: Score
+    legacy_reaction_days: Annotated[int, Field(ge=0)]
+    legacy_availability_present: bool
+    ranking_policy: str
+    committed_overall_rank: Annotated[int, Field(ge=1)] | None = None
+    committed_rank_score: Score | None = None
+
+
 class SignalDetailResponse(WireModel):
     api_contract_version: Literal["memento-signal-api-v1"] = SIGNAL_API_CONTRACT_VERSION
     signal: SignalDetailRow
     evidence: list[SignalEvidenceRow]
+    supply_context: SupplyContext | None = None
 
 
 class ApiProblem(Exception):
@@ -288,9 +369,9 @@ def _load_queue(store: PredictionStore) -> tuple[dict[str, object], list[dict[st
 def _validate_queue_release(
     manifest: dict[str, object], predictions: list[dict[str, object]]
 ) -> None:
-    display_count = int(manifest["display_count"])
-    candidate_count = int(manifest["candidate_count"])
-    ranks = [int(row["rank_position"]) for row in predictions]
+    display_count = int(cast(int,manifest["display_count"]))
+    candidate_count = int(cast(int,manifest["candidate_count"]))
+    ranks = [int(cast(int,row["rank_position"])) for row in predictions]
     identities = [str(row["prediction_id"]) for row in predictions]
     if display_count != len(predictions) or candidate_count < display_count:
         raise ValueError("prediction display count mismatch")
@@ -303,15 +384,15 @@ def _validate_queue_release(
 def _validate_signal_queue_release(
     manifest: dict[str, object], signals: list[dict[str, object]], signal_type: str | None,
 ) -> None:
-    candidate_count = int(manifest["candidate_count"])
-    display_count = int(manifest["display_count"])
+    candidate_count = int(cast(int,manifest["candidate_count"]))
+    display_count = int(cast(int,manifest["display_count"]))
     counts = manifest["candidate_counts_by_type"]
     if not isinstance(counts, dict) or sum(int(value) for value in counts.values()) != candidate_count:
         raise ValueError("signal candidate counts do not reconcile")
     if display_count != min(candidate_count, 10):
         raise ValueError("signal display count does not reconcile")
     identities = [str(row["signal_id"]) for row in signals]
-    overall_ranks = [int(row["overall_rank_position"]) for row in signals]
+    overall_ranks = [int(cast(int,row["overall_rank_position"])) for row in signals]
     if len(identities) != len(set(identities)) or overall_ranks != sorted(set(overall_ranks)):
         raise ValueError("signal identities and overall ranks must be unique and ordered")
     if signal_type is None:
@@ -448,7 +529,7 @@ def create_app(data_root: Path) -> FastAPI:
             return AttentionQueueResponse(
                 run=_run_metadata(manifest),
                 summary=AttentionSummary(
-                    eligible_candidate_count=int(manifest["candidate_count"]),
+                    eligible_candidate_count=int(cast(int,manifest["candidate_count"])),
                     displayed_prediction_count=len(queue),
                     estimated_lost_units=lost_units,
                     estimated_lost_sales_amount=lost_sales,
@@ -513,7 +594,13 @@ def create_app(data_root: Path) -> FastAPI:
             for row in rows:
                 payload = {name: row[name] for name in SignalRow.model_fields if name != "identity"}
                 signals.append(SignalRow.model_validate({**payload, "identity": identities[str(row["signal_id"])]}))
-            run = SignalRunMetadata.model_validate({name: manifest[name] for name in SignalRunMetadata.model_fields})
+            run_values = {name: manifest.get(name) for name in SignalRunMetadata.model_fields}
+            configuration = manifest.get("configuration", {})
+            if not isinstance(configuration,dict):
+                raise ValueError("invalid signal configuration")
+            run_values.update(calibration_status=configuration.get("calibration_status"),
+                              supply_projection_counts=configuration.get("projection_counts"))
+            run = SignalRunMetadata.model_validate(run_values)
             return SignalQueueResponse(run=run, signals=signals)
         except (FileNotFoundError, OSError, ValueError, KeyError, TypeError) as exc:
             raise _signal_problem(503, "release_integrity_error", "The Memento Signal release failed integrity validation.") from exc
@@ -532,7 +619,8 @@ def create_app(data_root: Path) -> FastAPI:
             detail = SignalDetailRow.model_validate({**payload, "identity": identity})
             evidence = [SignalEvidenceRow.model_validate(item) for item in store.evidence(signal_id)]
             _validated_signal_evidence(detail, evidence)
-            return SignalDetailResponse(signal=detail, evidence=evidence)
+            context = store.supply_context(signal_id)
+            return SignalDetailResponse(signal=detail, evidence=evidence, supply_context=SupplyContext.model_validate(context) if context is not None else None)
         except ApiProblem:
             raise
         except ValueError as exc:

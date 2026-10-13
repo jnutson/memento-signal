@@ -24,6 +24,7 @@ def build_availability_candidates(
     predictions = connection.execute(
         "SELECT * FROM read_parquet(?)", [str(prediction_root / "oos_prediction.parquet")]
     ).to_arrow_table().to_pylist()
+    signal_by_prediction = {}
     for source in predictions:
         observation = observation_by_key[(source["store_id"], source["product_id"])]
         price = observation["price"]
@@ -46,11 +47,11 @@ def build_availability_candidates(
             "inventory_cost_exposed_amount": None, "carrying_cost_28d_amount": None,
             "economic_impact_basis": "estimated_lost_retail_sales", "primary_economic_value": source["estimated_lost_sales_amount"],
         })
-        rows = connection.execute(
-            "SELECT * FROM read_parquet(?) WHERE prediction_id=?",
-            [str(prediction_root / "oos_prediction_evidence.parquet"), source["prediction_id"]],
-        ).to_arrow_table().to_pylist()
-        for item in rows:
+        signal_by_prediction[source["prediction_id"]] = signal_id
+    reader = connection.execute("SELECT * FROM read_parquet(?)", [str(prediction_root / "oos_prediction_evidence.parquet")]).to_arrow_reader(122_880)
+    for record_batch in reader:
+        for item in record_batch.to_pylist():
+            signal_id = signal_by_prediction[item["prediction_id"]]
             batch.evidence.append({
                 "signal_id": signal_id, "evidence_type": "inventory_projection", "evidence_date": item["projection_date"],
                 "path": item["path"], "actual_units": None, "retailer_forecast_units": None,

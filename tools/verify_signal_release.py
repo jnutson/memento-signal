@@ -44,9 +44,17 @@ def verify(data_root: Path) -> dict[str, object]:
         CASE WHEN s.signal_type='demand_momentum' THEN 36 ELSE 84 END""",
         [str(release / "signal_evidence.parquet"), str(release / "signal.parquet")]).fetchone()
     assert evidence_result is not None and evidence_result[0] == 0
-    before = {name: sha256_file(release / name) for name in ("manifest.json", "signal.parquet", "signal_evidence.parquet")}
+    names = ["manifest.json", "signal.parquet", "signal_evidence.parquet"]
+    if configuration.get("supply_projection_version"):
+        names.append("supply_context.parquet")
+        context_result = con.execute("""SELECT count(*) FROM read_parquet(?) s FULL JOIN
+          (SELECT signal_id,count(*) n FROM read_parquet(?) GROUP BY signal_id) c USING(signal_id)
+          WHERE s.signal_id IS NULL OR c.n IS NULL OR c.n!=1""", [str(release / "signal.parquet"),str(release / "supply_context.parquet")]).fetchone()
+        assert context_result is not None and context_result[0] == 0
+    before = {name: sha256_file(release / name) for name in names}
     pointer_before = (root / "signals" / "current.json").read_bytes()
-    replay = publish_signal_set([], [], canonical_manifest=canonical, data_root=root, configuration=configuration)
+    replay = publish_signal_set([], [], canonical_manifest=canonical, data_root=root, configuration=configuration,
+                               supply_context=[] if configuration.get("supply_projection_version") else None)
     assert replay == release
     assert before == {name: sha256_file(release / name) for name in before}
     assert pointer_before == (root / "signals" / "current.json").read_bytes()
