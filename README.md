@@ -1,172 +1,81 @@
-# Memento Signal Demo
+# Memento Analytics Demo
 
-This repository contains the deterministic Memento Signal path for Miro Toys. It
-publishes ten canonical DuckDB-queryable Parquet datasets and one immutable queue of
-Availability Risk, Demand Momentum Gap, and Inventory Imbalance Exposure signals.
-Signals retain native economics while type-relative impact, reaction time, and
-confidence provide a common rank. The legacy OOS artifact remains readable.
+This repository is the smallest credible local demo of Memento Loop's deterministic
+retail analytics path:
 
-The current fast-iteration profile uses **10 existing items, 1,000 existing stores,
-and 182 core days**, plus a separate 28-day evaluation window. Facts are an unchanged
-slice of the corrected immutable simulation. Annual sales/ASP scale is validated;
-historical mis-scaled releases remain untouched. Stage lead times, arrival ranges, planned supply,
-and action prerequisites are versioned synthetic assumptions. See the
-[supply contract](docs/plans/small-slice-supply-contract.md) and
-[acceptance report](docs/handoffs/small-slice-supply-acceptance.md).
-
-For the published corrected-scale engineering slice:
-
-```bash
-.venv/bin/memento-signal \
-  data/iteration-calibrated/canonical/mds_ea0495deed591497bb8d841cbf0cd2b6b53b28c5a67df9c9318884c4abf0faae \
-  --data-root data/iteration-calibrated --annual-carrying-cost-rate 0.25 \
-  --carrying-rate-version synthetic-toy-retail-benchmark-v1 \
-  --supply-model '/Users/mininutson/Desktop/Synthetic Data/releases/miro_iteration_calibrated_v1/f445d45980851282-20270130T120000Z/supply_model.json'
-.venv/bin/memento-serve --data-root data/iteration-calibrated
+```text
+retailer and internal inputs -> validation -> canonical retail data -> signals
 ```
 
-The source slice publisher is documented in Synthetic Data's
-`docs/memento-iteration-slice.md`. Supply-aware runs preserve the legacy committed
-comparator and expose before/after ranks. Unknown stock, capacity, or authority
-never becomes a confirmed actionable recommendation. Sales-scale validation does
-not establish calibrated demand paths, operational lead times, or commercial readiness.
-The acceptance report retains the original mis-scaled run and the corrected rerun.
+The implementation accepts an explicit synthetic or internal release-set manifest,
+validates and canonicalizes its declared Parquet files, and publishes one immutable
+queue containing Availability Risk, Demand Momentum Gap, and Inventory Imbalance
+Exposure. DuckDB over Parquet is the only analytics engine.
 
-The frontend ports the `memento-website` Next.js demo's original shell, editorial
-and Attention styles, font, and complete spatial renderer, with three pages:
-`/monday` (home and current signal briefing), `/attention`
-(supply-aware three-signal queue, 3D exploration, and complete evidence), and
-`/reports` (current release coverage, separate economic bases, and provenance).
-`/signal` redirects to Attention for existing bookmarks. The committed-order OOS
-baseline remains available through its read-only API, but is not mixed into the new
-queue. Weekly POS comparisons and historical report archives are not yet served;
-the UI explicitly discloses these gaps rather than importing prototype sample data.
+## Setup
 
 ```bash
-python -m venv .venv
-.venv/bin/pip install -e '.[dev]'
+make setup
+```
+
+## Run the local pipeline
+
+```bash
 .venv/bin/memento-ingest /absolute/path/to/release-sets/<release-id>/manifest.json \
   --classification synthetic --data-root data
 
-.venv/bin/memento-predict /absolute/path/to/data/canonical/<dataset-id> \
-  --data-root data
-
 .venv/bin/memento-signal /absolute/path/to/data/canonical/<dataset-id> \
-  --data-root data --annual-carrying-cost-rate <approved-rate> \
-  --carrying-rate-version <approved-version>
+  --data-root data \
+  --annual-carrying-cost-rate <approved-rate> \
+  --carrying-rate-version <approved-version> \
+  --supply-model /absolute/path/to/supply_model.json
 
-.venv/bin/memento-evaluate /absolute/path/to/data/predictions/<prediction-set-id> \
-  /absolute/path/to/data/canonical/<later-dataset-id> --data-root data
-```
-
-Only an explicit regular-file manifest is accepted. The source is never modified or
-copied. All data-bearing output stays below the ignored `data/` directory. A published
-manifest at `data/canonical/<dataset-id>/manifest.json` is the only analytics discovery
-point. Logs contain lifecycle metadata and rule identifiers, never source rows.
-
-Prediction publication creates immutable `oos_prediction.parquet`,
-`oos_prediction_evidence.parquet`, and `demand_forecast_vintage.parquet` artifacts.
-Only after all three are written does `data/predictions/current.json` move atomically to
-the new set. API code can use `memento.serving.PredictionStore` to retrieve the current
-run, top-ten queue, and calculation evidence without scanning raw retail facts or
-introducing another database.
-
-Signal execution is split into narrow stages: `orchestrator.py` owns source validation
-and canonical publication; `availability_signal.py`, `demand_signal.py`, and
-`inventory_signal.py` independently produce unranked candidates and evidence;
-`signal_ranking.py` assigns type-relative and overall ranks; and
-`signal_publication.py` atomically publishes the ranked set. `signals.py` only prepares
-cutoff-safe canonical inputs and coordinates those stages. Serving reads published
-artifacts and never invokes metric or ranking code.
-
-## Memento Signal interface
-
-Attention now includes a progressively disclosed investigation workspace for all four
-metric directions. After publishing a synthetic signal release, publish its immutable
-investigation artifacts separately:
-
-```bash
-.venv/bin/python -m memento.investigation --data-root data
-.venv/bin/python -m tools.verify_investigation --data-root data
-```
-
-The publisher is offline and synthetic-only; it never modifies the source or signal
-release/current pointer. The API serves validated, release-bound chart and ledger
-records without recomputing the signal engine per request. See
-[`docs/plans/attention-investigation-ux.md`](docs/plans/attention-investigation-ux.md).
-
-The current Attention priority policy is impact/urgency/confidence **40/40/20**.
-Urgency means urgency to act based on the conservative start-by deadline; execution
-feasibility remains separate. Confidence multiplies forecast quality, completeness,
-and stability. Feed and graph share the same immutable top-ten ranking and expose
-native dollar impact. See the current v1.2.0 section of the metric contract.
-
-To derive this policy from an existing synthetic baseline signal release without
-recomputing forecasts or changing source data:
-
-```bash
 .venv/bin/python -m memento.attention_priority \
-  data/signals/BASELINE_SIGNAL_SET_ID/manifest.json --data-root data
+  data/signals/<baseline-signal-set-id>/manifest.json --data-root data
+
+.venv/bin/python -m memento.investigation --data-root data
+.venv/bin/memento-serve --data-root data
 ```
 
-This publishes a new immutable signal release, preserving the original and binding
-its manifest hash into the new configuration. It intentionally accepts only a
-baseline release with a synthetic canonical dataset, not an already-prioritized one.
-
-The `web/` application contains Monday, Attention, and Reports. It consumes
-the immutable queue through a local FastAPI adapter; Python response models enforce the
-server contract and frontend Zod schemas validate every JSON payload before it reaches
-React.
-
-Run the API and frontend in separate terminals after publishing a prediction set:
+In another terminal:
 
 ```bash
-.venv/bin/memento-serve --data-root data
-
-cd web
-npm install
-npm run dev
+npm --prefix web run dev
 ```
 
-Open `http://127.0.0.1:3000/monday`. Next.js proxies same-origin `/api/signals`
-requests to the loopback service at `http://127.0.0.1:8000`; override the service origin
-with `MEMENTO_API_ORIGIN` when needed. The API is read-only and does not recompute ranks,
-scores, sensitivity paths, or recommendations.
+Open `http://127.0.0.1:3000/monday`. The application exposes Monday, Attention,
+and Reports. `/signal` remains a redirect for old bookmarks; it is not a separate
+product surface.
 
-Frontend verification commands are `npm run typecheck`, `npm run lint`, `npm test`,
-`npm run build`, and `npm run test:e2e`. The Playwright workflow uses minimized route
-fixtures; Python integration tests cover the live Parquet-to-HTTP boundary.
+Only explicit regular-file manifests are accepted. Source files are never modified
+or copied. Generated data remains below the ignored `data/` directory, and logs contain
+metadata and rule identifiers rather than source rows.
 
-From the repository root, `make verify` runs the complete merge gate: Python tests,
-frontend typechecking, linting, unit tests, production build, mocked-browser workflow,
-and the full browser-to-API-to-Parquet workflow. GitHub Actions runs the same gate on
-every pull request and every push to `main`. Use `make setup` to create the local Python
-virtual environment and install the Python and frontend dependencies.
+## Verification
 
-The complete synthetic pipeline can be exercised independently with
-`.venv/bin/pytest tests/e2e` (or `.venv/bin/pytest -m e2e`). From `web/`, run
-`npm run test:e2e:fullstack` to verify the browser, real API, and published Parquet
-artifacts together. See
-[`tests/e2e/README.md`](tests/e2e/README.md) for the boundary between these pipeline
-tests and the browser workflow tests in `web/tests/e2e`.
+```bash
+make verify
+```
 
-## Product direction
+The full gate runs Python tests and type checking, frontend type checking and linting,
+unit tests, the production build, mocked browser flows, and the full browser-to-API-to-
+Parquet workflow.
 
-The focused product milestone publishes three deterministic signals without execution
-controls, editable scenarios, probability claims, Monte Carlo simulation, or black-box
-models. See:
+## Current documentation
 
-- [`docs/product/mvp-product-shape.md`](docs/product/mvp-product-shape.md) for the
-  end-state MVP requirements, metric contracts, ranking formula, and acceptance tests.
-- [`docs/product/mvp-metric-contract.md`](docs/product/mvp-metric-contract.md) for the
-  exact formulas, forecast/projection mechanics, thresholds, and no-drift rules.
-- [`docs/plans/insights-mvp-data-scope.md`](docs/plans/insights-mvp-data-scope.md) for
-  the bounded observable-data scope and ownership boundaries.
-- [`docs/product/memento-glossary.md`](docs/product/memento-glossary.md) for Walmart-
-  aligned source and Memento-derived terminology.
-- [`docs/plans/attention-ui-integration.md`](docs/plans/attention-ui-integration.md) for
-  the accepted Attention UI integration scope and verification criteria.
-- [`docs/handoffs/synthetic-data-memento-signal-v1.md`](docs/handoffs/synthetic-data-memento-signal-v1.md)
-  for the Synthetic Data verification and full-scale release handback.
-- [`docs/handoffs/memento-signal-full-scale-findings.md`](docs/handoffs/memento-signal-full-scale-findings.md)
-  for measured acceptance results, availability dominance, and remaining v1 blockers.
+- [`docs/architecture/canonical-retail-v1.md`](docs/architecture/canonical-retail-v1.md)
+  defines canonical Parquet schemas and lineage.
+- [`docs/architecture/ingestion.md`](docs/architecture/ingestion.md) defines the local
+  ingestion boundary.
+- [`docs/architecture/signal-serving.md`](docs/architecture/signal-serving.md) defines
+  immutable signal discovery and serving.
+- [`docs/product/mvp-product-shape.md`](docs/product/mvp-product-shape.md) defines the
+  current product boundary.
+- [`docs/product/mvp-metric-contract.md`](docs/product/mvp-metric-contract.md) defines
+  current ranking and evidence semantics.
+- [`docs/product/data-scope.md`](docs/product/data-scope.md) and
+  [`docs/product/supply-contract.md`](docs/product/supply-contract.md) define the
+  accepted input and assumption scope.
+
+This demo is synthetic-data-only for its investigation artifacts and is not approved
+for confidential customer or production data.

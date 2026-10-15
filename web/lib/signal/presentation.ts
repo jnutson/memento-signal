@@ -23,7 +23,7 @@ export function impactSummary(signal: SignalRow): string {
 
 export function decisionSummary(signal: SignalRow): string {
   const slack = signal.decision_slack_days;
-  if (slack == null) return "Decision urgency unavailable in this legacy release";
+  if (slack == null) return "Decision urgency is unavailable for this release";
   const date = new Date(`${signal.observation_date}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + slack);
   return `${slack < 0 ? `${Math.abs(slack)} days past conservative start-by` : slack === 0 ? "Conservative start-by is today at snapshot" : `${slack} days left to start`} · ${formatCutoff(date.toISOString())} · ${signal.urgency_basis === "declared_review_allowance" ? "review/replan allowance" : "assumed action duration"}`;

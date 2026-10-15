@@ -13,7 +13,7 @@ import pyarrow.parquet as pq
 
 from .api import SupplyContext
 from .manifest import sha256_file
-from .serving import PredictionStore
+from .serving import safe_member, validate_release_files
 from .signal_contract import SIGNAL_SCHEMA, URGENCY_POLICY_VERSION, decimal_value
 from .signal_publication import publish_signal_set
 from .signal_ranking import rank_signal_candidates
@@ -56,7 +56,7 @@ def prioritize(source_manifest: Path, *, data_root: Path) -> Path:
     manifest = json.loads(source.read_text())
     if manifest.get("signal_set_id") != source.parent.name or manifest["configuration"].get("priority_policy"):
         raise ValueError("expected an immutable baseline signal release")
-    PredictionStore._validate_files(source.parent, manifest)
+    validate_release_files(source.parent, manifest)
     expected = {"signal.parquet", "signal_evidence.parquet"}
     has_supply = bool(manifest["configuration"].get("supply_projection_version"))
     if has_supply:
@@ -64,13 +64,13 @@ def prioritize(source_manifest: Path, *, data_root: Path) -> Path:
     if {row["path"] for row in manifest["files"]} != expected:
         raise ValueError("invalid source inventory")
     canonical_root = (root / "canonical").resolve(strict=True)
-    canonical_path = PredictionStore._safe_member(canonical_root, manifest["canonical_dataset_id"] + "/manifest.json")
+    canonical_path = safe_member(canonical_root, manifest["canonical_dataset_id"] + "/manifest.json")
     canonical = json.loads(canonical_path.read_text())
     if canonical.get("source_classification") != "synthetic":
         raise ValueError("priority publication is currently synthetic-only")
     if canonical["dataset_id"] != manifest["canonical_dataset_id"]:
         raise ValueError("canonical identity mismatch")
-    PredictionStore._validate_files(canonical_path.parent, canonical)
+    validate_release_files(canonical_path.parent, canonical)
     table = pq.read_table(source.parent / "signal.parquet")
     if table.schema != SIGNAL_SCHEMA or table.num_rows != manifest["candidate_count"]:
         raise ValueError("invalid baseline signal schema or count")

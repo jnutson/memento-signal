@@ -19,7 +19,7 @@ from .demand_signal import calculate_demand_momentum
 from .investigation_contract import COVER_VERSION, VERSION, Day, Diagnostics, Investigation, Receipt, Week
 from .manifest import canonical_json, sha256_file
 from .metrics import project_inventory
-from .serving import PredictionStore, SignalStore, SIGNAL_ID
+from .serving import SIGNAL_ID, SignalStore, safe_member, validate_release_files
 
 
 def weekly_rows(days: list[Day], forecasts: dict, roles: dict) -> list[Week]:
@@ -202,11 +202,11 @@ def publish(data_root: Path) -> Path:
     release, manifest = SignalStore(root / "signals", root / "canonical").current_release()
     configuration = manifest["configuration"]
     if not isinstance(configuration, dict): raise ValueError("invalid signal configuration")
-    canonical_path = PredictionStore._safe_member(root / "canonical", str(manifest["canonical_dataset_id"]) + "/manifest.json")
+    canonical_path = safe_member(root / "canonical", str(manifest["canonical_dataset_id"]) + "/manifest.json")
     canonical = json.loads(canonical_path.read_text())
     if canonical.get("source_classification") != "synthetic" or canonical.get("dataset_id") != manifest["canonical_dataset_id"] or canonical["as_of"] != manifest["signal_as_of"]:
         raise ValueError("investigation requires matching synthetic canonical snapshot")
-    PredictionStore._validate_files(canonical_path.parent, canonical)
+    validate_release_files(canonical_path.parent, canonical)
     lineage = dict(signal_set_id=manifest["signal_set_id"], canonical_dataset_id=manifest["canonical_dataset_id"],
                    signal_manifest_sha256=sha256_file(release / "manifest.json"), canonical_manifest_sha256=sha256_file(canonical_path),
                    supply_model_sha256=configuration.get("supply_model_sha256"), configuration_hash=manifest["configuration_hash"], signal_as_of=manifest["signal_as_of"])
@@ -216,7 +216,7 @@ def publish(data_root: Path) -> Path:
     if output.exists():
         m = json.loads((output / "manifest.json").read_text())
         if m.get("identity") != identity: raise ValueError("investigation identity mismatch")
-        PredictionStore._validate_files(output,m)
+        validate_release_files(output,m)
         return output
     stage = root / "staging" / ("investigation_" + uuid.uuid4().hex)
     try:
@@ -228,7 +228,7 @@ def publish(data_root: Path) -> Path:
         files = []
         with duckdb.connect() as con:
             for table in ("calendar_day","sales_daily","inventory_daily","demand_forecast_weekly","replenishment_commitment"):
-                paths = [str(PredictionStore._safe_member(canonical_path.parent,f["path"])) for f in canonical["files"] if f["path"].startswith(table+"/")]
+                paths = [str(safe_member(canonical_path.parent,f["path"])) for f in canonical["files"] if f["path"].startswith(table+"/")]
                 con.from_parquet(paths).create_view(table)
             for signal in signals:
                 payload = build_investigation(con, signal, [row for row in all_evidence if row["signal_id"] == signal["signal_id"]],contexts.get(signal["signal_id"]),lineage)
@@ -245,17 +245,17 @@ def publish(data_root: Path) -> Path:
 
 def read_investigation(root: Path, release: Path, manifest: dict, signal_id: str) -> Investigation:
     if not SIGNAL_ID.fullmatch(signal_id): raise ValueError("invalid signal identity")
-    canonical = PredictionStore._safe_member(root / "canonical", manifest["canonical_dataset_id"] + "/manifest.json")
+    canonical = safe_member(root / "canonical", manifest["canonical_dataset_id"] + "/manifest.json")
     c = json.loads(canonical.read_text())
     if c.get("source_classification") != "synthetic": raise ValueError("synthetic only")
-    PredictionStore._validate_files(canonical.parent,c)
+    validate_release_files(canonical.parent,c)
     lineage = dict(signal_set_id=manifest["signal_set_id"],canonical_dataset_id=manifest["canonical_dataset_id"],
                    signal_manifest_sha256=sha256_file(release/"manifest.json"),canonical_manifest_sha256=sha256_file(canonical),
                    supply_model_sha256=manifest["configuration"].get("supply_model_sha256"),configuration_hash=manifest["configuration_hash"],signal_as_of=manifest["signal_as_of"])
     identity = {**lineage,"contract_version":VERSION,"cover_version":COVER_VERSION,"slice":c.get("slice")}
     name = "mis_" + hashlib.sha256(canonical_json(identity)).hexdigest()
     if (root / "investigations" / name).is_symlink(): raise ValueError("investigation directory cannot be a symlink")
-    directory = PredictionStore._safe_member(root / "investigations", name)
+    directory = safe_member(root / "investigations", name)
     if (directory / "manifest.json").is_symlink() or (directory / "manifest.json").stat().st_size > 65536:
         raise ValueError("invalid investigation manifest size or path")
     m = json.loads((directory / "manifest.json").read_text())
@@ -265,8 +265,8 @@ def read_investigation(root: Path, release: Path, manifest: dict, signal_id: str
     if not file: raise FileNotFoundError("investigation not published")
     if (directory / member).is_symlink() or file.get("bytes",0)>2*1024*1024:
         raise ValueError("invalid investigation payload size or path")
-    PredictionStore._validate_files(directory,{"files":[file]})
-    payload = Investigation.model_validate_json(PredictionStore._safe_member(directory,member).read_text())
+    validate_release_files(directory,{"files":[file]})
+    payload = Investigation.model_validate_json(safe_member(directory,member).read_text())
     if payload.signal_id != signal_id or payload.signal_set_id != manifest["signal_set_id"] or payload.signal_manifest_sha256 != lineage["signal_manifest_sha256"] or payload.configuration_hash != lineage["configuration_hash"] or payload.canonical_manifest_sha256 != lineage["canonical_manifest_sha256"]:
         raise ValueError("investigation provenance mismatch")
     return payload

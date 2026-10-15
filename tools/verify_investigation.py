@@ -10,13 +10,13 @@ from fastapi.testclient import TestClient
 from memento.api import create_app
 from memento.investigation import build_investigation, publish, read_investigation
 from memento.manifest import canonical_json, sha256_file
-from memento.serving import PredictionStore, SignalStore
+from memento.serving import SignalStore, safe_member
 
 
 def verify(root: Path):
     root=root.resolve(strict=True)
     release,manifest=SignalStore(root/"signals",root/"canonical").current_release()
-    before={str(p):sha256_file(p) for folder in ("canonical","signals","predictions") for p in (root/folder).rglob("*") if p.is_file()}
+    before={str(p):sha256_file(p) for folder in ("canonical","signals") for p in (root/folder).rglob("*") if p.is_file()}
     artifact=publish(root)
     cpath=root/"canonical"/str(manifest["canonical_dataset_id"])/"manifest.json"
     canonical=json.loads(cpath.read_text())
@@ -29,7 +29,7 @@ def verify(root: Path):
     sizes=[]
     with duckdb.connect() as con:
         for table in ("calendar_day","sales_daily","inventory_daily","demand_forecast_weekly","replenishment_commitment"):
-            con.from_parquet([str(PredictionStore._safe_member(cpath.parent,f["path"])) for f in canonical["files"] if f["path"].startswith(table+"/")]).create_view(table)
+            con.from_parquet([str(safe_member(cpath.parent,f["path"])) for f in canonical["files"] if f["path"].startswith(table+"/")]).create_view(table)
         for row in rows:
             saved=read_investigation(root,release,manifest,row["signal_id"])
             lineage={key:saved.model_dump(mode="json")[key] for key in ("signal_set_id","canonical_dataset_id","signal_manifest_sha256","canonical_manifest_sha256","supply_model_sha256","configuration_hash","signal_as_of")}

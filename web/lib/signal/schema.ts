@@ -86,7 +86,7 @@ const supplyContext = z.strictObject({
   supply_timing: z.record(z.enum(["committed", "early", "typical", "conservative"]), z.strictObject({ first_oos_date: z.iso.date().nullable(), lost_units: z.number().nonnegative() })),
   planning_prerequisites: z.array(z.string()),
   actions: z.array(z.strictObject({ action: z.string(), early_days: z.number().int().nonnegative(), typical_days: z.number().int().nonnegative(), conservative_days: z.number().int().nonnegative(), typical_slack: z.number().int(), conservative_slack: z.number().int(), timing: z.enum(["robust", "conditional", "too_late"]), feasibility: z.enum(["robust", "conditional", "too_late", "unknown", "not_applicable"]), missing_prerequisites: z.array(z.string()), score: z.number().min(0).max(1), stages: z.array(z.string()) })),
-  legacy_reaction_score: score, legacy_reaction_days: z.number().int().nonnegative(), legacy_availability_present: z.boolean(), ranking_policy: z.string(),
+  baseline_reaction_score: score, baseline_reaction_days: z.number().int().nonnegative(), baseline_availability_present: z.boolean(), ranking_policy: z.string(),
   committed_overall_rank: z.number().int().positive().nullable().optional(), committed_rank_score: score.nullable().optional(),
 }).superRefine((value, context) => {
   for (const row of [...value.arrivals, ...value.planned_replenishment]) {

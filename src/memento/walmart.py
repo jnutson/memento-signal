@@ -44,10 +44,10 @@ SOURCE_TYPES = {
     "long_rng_store_dmd_frcst": ["INTEGER","VARCHAR","TINYINT","INTEGER","BIGINT","INTEGER","DOUBLE"],
 }
 
-# Retain the already-published V1 fixture/legacy observable contract while accepting
-# the narrower PSP physical integer widths used by the Miro Brand A releases. These
-# are two pinned schemas, not general implicit numeric coercion.
-LEGACY_SOURCE_TYPES = {
+# Accept the two explicitly supported physical schemas: fixture-width integers and
+# the narrower PSP integer widths used by the Miro Brand A releases. This is not
+# general implicit numeric coercion.
+FIXTURE_SOURCE_TYPES = {
     "calendar_dim": ["DATE","VARCHAR","INTEGER","INTEGER","VARCHAR","INTEGER","VARCHAR","INTEGER","INTEGER","INTEGER","INTEGER","INTEGER","INTEGER","INTEGER","INTEGER","INTEGER","INTEGER","INTEGER","DATE","DATE","INTEGER"],
     "store_dim": ["INTEGER","VARCHAR","INTEGER","VARCHAR","VARCHAR","VARCHAR","VARCHAR","VARCHAR","VARCHAR","VARCHAR","VARCHAR","VARCHAR","VARCHAR","DOUBLE","DOUBLE","INTEGER","VARCHAR","INTEGER","VARCHAR","VARCHAR","VARCHAR"],
     "omni_item_dimensions": ["INTEGER","BIGINT","VARCHAR","VARCHAR","VARCHAR","VARCHAR","INTEGER","VARCHAR","INTEGER","VARCHAR","INTEGER","VARCHAR","INTEGER","VARCHAR","VARCHAR","VARCHAR","DATE","BOOLEAN","VARCHAR","DOUBLE","VARCHAR","VARCHAR"],
@@ -126,8 +126,8 @@ def validate_source_data(con: duckdb.DuckDBPyConnection, inventory: SourceInvent
             desc = con.execute(f"DESCRIBE SELECT * FROM {scan}").fetchall()
             schema = [(row[0], row[1]) for row in desc]
             expected_schema = list(zip(expected_columns, SOURCE_TYPES[name], strict=True))
-            legacy_schema = list(zip(expected_columns, LEGACY_SOURCE_TYPES[name], strict=True))
-            schema_ok = schema in (expected_schema, legacy_schema)
+            fixture_schema = list(zip(expected_columns, FIXTURE_SOURCE_TYPES[name], strict=True))
+            schema_ok = schema in (expected_schema, fixture_schema)
             out.append(ValidationResult("SRC_SCHEMA_EXACT", "PASS" if schema_ok else "FAIL", name, 0 if schema_ok else 1, "exact supported physical column and type contract"))
             if not schema_ok:
                 schemas_valid = False

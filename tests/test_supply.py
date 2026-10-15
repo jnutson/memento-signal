@@ -11,7 +11,7 @@ from decimal import Decimal
 from memento.api import create_app, SupplyContext
 from memento.signals import run_signals
 from memento.supply import SupplyModel, arrival, order_arrivals, action_options, plan_replenishment, load_model
-from test_prediction_pipeline import _canonical_fixture
+from canonical_fixture import canonical_fixture
 
 
 def model_data():
@@ -71,7 +71,7 @@ def test_model_rejects_unordered_ranges_and_checksum_changes(tmp_path):
 
 
 def test_supply_publication_api_and_independent_replay(tmp_path: Path):
-    source=tmp_path/"source"; source.mkdir(); fixture=_canonical_fixture(source)
+    source=tmp_path/"source"; source.mkdir(); fixture=canonical_fixture(source)
     product=fixture/"product/part-00000.parquet"
     with duckdb.connect() as con:
         table=con.execute("SELECT *, 'Toys'::VARCHAR source_fineline_name FROM read_parquet(?)",[str(product)]).to_arrow_table()

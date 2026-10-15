@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import math
 from dataclasses import dataclass
 from datetime import date
@@ -151,13 +150,6 @@ def timing_stability(earliest: date | None, base: date | None, latest: date | No
 def confidence_score(wape: float | None, completeness: float, stability: float) -> tuple[float, float]:
     quality = 1 - clamp(wape, 0, 1) if wape is not None else 0.0
     return quality, 0.50 * quality + 0.30 * completeness + 0.20 * stability
-
-
-def stable_prediction_id(
-    source_release_set_id: str, prediction_as_of: str, location_id: str, product_id: str, predicted_oos_date: date
-) -> str:
-    preimage = "|".join((source_release_set_id, prediction_as_of, location_id, product_id, predicted_oos_date.isoformat()))
-    return "oos_" + hashlib.sha256(preimage.encode()).hexdigest()
 
 
 def rank_score(impact: float, reaction: float, confidence: float) -> float:

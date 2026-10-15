@@ -10,7 +10,7 @@ from memento.metrics import project_inventory
 from memento.models import IngestionFailure
 from memento.signals import _daily_base_forecast, _load_observations, run_signals
 from memento.signal_ranking import rank_signal_candidates
-from test_prediction_pipeline import _canonical_fixture
+from canonical_fixture import canonical_fixture
 
 
 def test_demand_momentum_acceleration_and_material_day():
@@ -58,7 +58,7 @@ def test_cross_type_ranking_normalizes_impact_within_type_and_keeps_fixed_order(
 
 
 def test_daily_base_forecast_uses_calendar_aligned_weekday_shares(tmp_path):
-    canonical = _canonical_fixture(tmp_path)
+    canonical = canonical_fixture(tmp_path)
     connection = duckdb.connect()
     observation = {"store_id": "loc_test", "product_id": "prd_test", "observation_date": date(2027, 1, 29)}
     weeks = connection.execute(
@@ -76,7 +76,7 @@ def test_daily_base_forecast_uses_calendar_aligned_weekday_shares(tmp_path):
 
 
 def test_signal_observation_uses_realized_price_and_scoped_eligibility(tmp_path):
-    canonical = _canonical_fixture(tmp_path)
+    canonical = canonical_fixture(tmp_path)
     sales = canonical / "sales_daily" / "part-00000.parquet"
     replacement = canonical / "sales_daily" / "replacement.parquet"
     connection = duckdb.connect()
@@ -98,7 +98,7 @@ def test_signal_observation_uses_realized_price_and_scoped_eligibility(tmp_path)
 
 def test_signal_publication_adapts_availability_and_replays(tmp_path):
     (tmp_path / "source").mkdir()
-    canonical = _canonical_fixture(tmp_path / "source")
+    canonical = canonical_fixture(tmp_path / "source")
     output = run_signals(canonical, data_root=tmp_path / "data", annual_carrying_cost_rate=Decimal("0.20"), carrying_rate_version="synthetic-test-rate-v1")
     import duckdb
     import json
@@ -117,7 +117,7 @@ def test_signal_publication_adapts_availability_and_replays(tmp_path):
 
 def test_signal_publication_rejects_incomplete_existing_manifest(tmp_path):
     (tmp_path / "source").mkdir()
-    canonical = _canonical_fixture(tmp_path / "source")
+    canonical = canonical_fixture(tmp_path / "source")
     output = run_signals(canonical, data_root=tmp_path / "data", annual_carrying_cost_rate=Decimal("0.20"), carrying_rate_version="synthetic-test-rate-v1")
     import json
     manifest_path = output / "manifest.json"

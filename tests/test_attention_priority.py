@@ -12,7 +12,7 @@ from memento.manifest import sha256_file
 from memento.signal_contract import PRIORITY_SCHEMA, URGENCY_RANKER_VERSION
 from memento.signal_ranking import rank_signal_candidates
 from memento.signals import run_signals
-from test_prediction_pipeline import _canonical_fixture
+from canonical_fixture import canonical_fixture
 
 
 def test_urgency_tracks_decision_deadline_and_keeps_unknown_feasibility_separate():
@@ -62,7 +62,7 @@ def test_all_three_dimensions_influence_priority_and_urgency_has_equal_impact_we
 def test_derived_publication_is_immutable_replayable_and_served_with_new_contract(tmp_path):
     source = tmp_path / "source"
     source.mkdir()
-    canonical = _canonical_fixture(source)
+    canonical = canonical_fixture(source)
     manifest_path = canonical / "manifest.json"
     manifest = json.loads(manifest_path.read_text())
     manifest["source_classification"] = "synthetic"

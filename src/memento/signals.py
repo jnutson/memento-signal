@@ -12,7 +12,7 @@ from .availability_signal import build_availability_candidates
 from .demand_signal import build_demand_candidate
 from .inventory_signal import build_inventory_candidate
 from .models import IngestionFailure, ValidationResult
-from .prediction import run_predictions
+from .availability_inputs import build_availability_inputs
 from .signal_contract import ForecastVintage, Observation, SIGNAL_TYPE_ORDER
 from .signal_publication import publish_signal_set
 from .signal_ranking import rank_signal_candidates
@@ -224,7 +224,7 @@ def run_signals(
     if "company_item_economics" not in tables:
         raise IngestionFailure("signal_validation", [ValidationResult("SIGNAL_ECONOMICS_REQUIRED", "FAIL", "company_item_economics", 1, "approved unit economics are required")])
 
-    prediction_root = run_predictions(canonical_root, data_root=data_root)
+    availability_inputs = build_availability_inputs(canonical_root)
     connection = duckdb.connect()
     observations = _load_observations(connection, canonical_root)
     if not observations:
@@ -232,7 +232,7 @@ def run_signals(
     reactions = _load_reactions(connection, canonical_root, observations[0]["observation_date"])
     weekday_inputs = _load_weekday_inputs(connection, canonical_root, observations[0]["observation_date"])
     signal_as_of = datetime.fromisoformat(str(manifest["as_of"]).replace("Z", "+00:00"))
-    batch = build_availability_candidates(connection, prediction_root=prediction_root, observations=observations, canonical_manifest=manifest)
+    batch = build_availability_candidates(inputs=availability_inputs, observations=observations, canonical_manifest=manifest)
     baseline_availability = {(str(row["store_id"]),str(row["product_id"])):row for row in batch.candidates}
     committed_batch = CandidateBatch(candidates=[dict(row) for row in batch.candidates]) if model is not None else None
     baseline_ranks = {}
@@ -244,17 +244,20 @@ def run_signals(
     supply_rows: list[dict[str, str]] = []
     projection_counts = {"committed": 0, "early": 0, "typical": 0, "conservative": 0}
 
-    forecast_rows = connection.execute(
-        "SELECT store_id,product_id,target_retail_year_week,memento_weekly_demand_base,forecast_wape FROM read_parquet(?)",
-        [str(prediction_root / "demand_forecast_vintage.parquet")],
-    ).fetchall()
+    forecast_rows = [
+        (
+            row["store_id"], row["product_id"], row["target_retail_year_week"],
+            row["memento_weekly_demand_base"], row["forecast_wape"],
+        )
+        for row in availability_inputs.forecasts
+    ]
     forecasts_by_key: dict[tuple[str, str], list[ForecastVintage]] = defaultdict(list)
     for row in forecast_rows:
         forecasts_by_key[(str(row[0]), str(row[1]))].append(ForecastVintage(
             target_retail_year_week=int(row[2]), memento_weekly_demand_base=row[3], forecast_wape=row[4],
         ))
 
-    # Prepare each source once; preserve the legacy per-key equations and order.
+    # Prepare each source once; preserve the baseline per-key equations and order.
     history_rows = connection.execute("""WITH weekly AS (
       SELECT s.location_id,s.product_id,c.retail_year_week,sum(s.sales_quantity)::DOUBLE actual_units
       FROM read_parquet(?) s JOIN read_parquet(?) i USING(business_date,location_id,product_id)
@@ -380,10 +383,10 @@ def run_signals(
                     "availability" if candidate["signal_type"]=="availability" else str(candidate["signal_direction"]))
                 original_score = candidate["reaction_score"]
                 candidate["reaction_score"] = decimal_value(max((row["score"] for row in options),default=0),6)
-                # Legacy slack fields stay explicit legacy allowances; action-specific slack is in the context.
+                # Baseline slack fields remain explicit allowances; action-specific slack is in the context.
                 candidate["action_slack_days"], _ = reaction_metrics(int(str(candidate["days_until_material_impact"])),minimum_reaction)
-                source_context = {**context,"actions":options,"legacy_reaction_score":str(original_score),"legacy_reaction_days":minimum_reaction,
-                    "legacy_availability_present": key in baseline_ranks,
+                source_context = {**context,"actions":options,"baseline_reaction_score":str(original_score),"baseline_reaction_days":minimum_reaction,
+                    "baseline_availability_present": key in baseline_ranks,
                     "ranking_policy":"unknown prerequisites contribute zero actionability; weights remain 0.50/0.30/0.20"}
                 supply_rows.append({"signal_id":str(candidate["signal_id"]),"context":json_context(source_context)})
 

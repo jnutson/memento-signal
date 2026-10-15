@@ -28,7 +28,7 @@ export default function SignalScene({ signals, selectedId, hoveredId = null, onS
     let instance: AttentionScene | null = null;
     void import("@/lib/attention/original-scene").then(({ createScene }) => {
       if (!active || !host.current) return;
-      instance = createScene(host.current, { onSelect: (id) => latest.current.onSelect(id), onHover: (id) => latest.current.onHover?.(id), thirdAxisLabel: latest.current.signals.every((row) => row.urgency_score != null) ? "Urgency" : "Legacy actionability" });
+      instance = createScene(host.current, { onSelect: (id) => latest.current.onSelect(id), onHover: (id) => latest.current.onHover?.(id), thirdAxisLabel: latest.current.signals.every((row) => row.urgency_score != null) ? "Urgency" : "Baseline actionability" });
       instance.setItems(latest.current.signals.map((row) => ({ id: row.signal_id, title: `${row.identity.item_name} · ${row.identity.store_name}`, w: signalWorld(row) })));
       instance.focus(latest.current.selectedId);
       scene.current = instance;

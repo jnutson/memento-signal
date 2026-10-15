@@ -22,7 +22,7 @@ def runtime(tmp_path):
 
 
 def test_all_four_paths_publish_reconcile_and_keep_parent_immutable(runtime):
-    before={str(p):sha256_file(p) for folder in ("canonical","signals","predictions") for p in (runtime/folder).rglob("*") if p.is_file()}
+    before={str(p):sha256_file(p) for folder in ("canonical","signals") for p in (runtime/folder).rglob("*") if p.is_file()}
     release=publish(runtime)
     assert publish(runtime)==release
     assert before=={path:sha256_file(__import__("pathlib").Path(path)) for path in before}

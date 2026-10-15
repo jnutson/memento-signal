@@ -7,13 +7,13 @@ from fastapi.testclient import TestClient
 
 from memento.api import SIGNAL_API_CONTRACT_VERSION, SignalDetailRow, SignalEvidenceRow, _validate_signal_queue_release, _validated_signal_evidence, create_app
 from memento.signals import run_signals
-from test_prediction_pipeline import _canonical_fixture
+from canonical_fixture import canonical_fixture
 
 
 def test_signal_api_returns_immutable_rank_and_type_specific_detail(tmp_path: Path):
     source = tmp_path / "source"
     source.mkdir()
-    canonical = _canonical_fixture(source)
+    canonical = canonical_fixture(source)
     data_root = tmp_path / "data"
     target = data_root / "canonical" / "mds_fixture"
     target.parent.mkdir(parents=True)

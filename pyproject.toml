@@ -20,8 +20,6 @@ dev = ["httpx>=0.28,<1", "pyright>=1.1,<2", "pytest>=8.4,<9"]
 
 [project.scripts]
 memento-ingest = "memento.cli:main"
-memento-predict = "memento.prediction_cli:main"
-memento-evaluate = "memento.evaluation_cli:main"
 memento-serve = "memento.api_cli:main"
 memento-signal = "memento.signal_cli:main"
 
@@ -40,6 +38,7 @@ markers = [
 include = [
   "src/memento/metrics.py",
   "src/memento/signal_contract.py",
+  "src/memento/availability_inputs.py",
   "src/memento/availability_signal.py",
   "src/memento/demand_signal.py",
   "src/memento/inventory_signal.py",
