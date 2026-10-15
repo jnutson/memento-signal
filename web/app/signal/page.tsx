@@ -1,5 +1,3 @@
-import SignalView from "@/components/signal/SignalView";
-
-export const metadata = { title: "Memento Loop · Memento Signal" };
-
-export default function SignalPage() { return <SignalView />; }
+import { redirect } from "next/navigation";
+// Preserve old bookmarks without exposing a fourth product page.
+export default function SignalPage() { redirect("/attention"); }

@@ -1,7 +1,69 @@
 # Memento Signal Three-Metric MVP — Metric Contract
 
 Status: accepted for MVP implementation
-Contract version: `memento-signal-metrics-v1.0.0`
+Current priority contract: `memento-signal-metrics-v1.2.0`.
+The original `v1.0.0` projection contract below remains historical and reproducible.
+
+## Current Attention priority policy (v1.2.0)
+
+This policy supersedes the legacy M-025 reaction score, M-029 additive confidence,
+and M-031 ranking formula **for urgency-policy signal releases only**. Legacy OOS
+predictions and earlier signal releases are not rewritten. Projection, admission,
+material-impact dates, economics, completeness, and stability inputs are unchanged.
+
+```text
+decision_lead_time_days = shortest conservative duration among potentially
+  applicable supply actions (including unknown prerequisites, excluding not_applicable)
+  or minimum_reaction_days as a declared review/replan allowance if none exist
+decision_slack_days = days_until_material_impact - decision_lead_time_days
+urgency_score = clamp(1 - decision_slack_days / 28, 0, 1)
+confidence_score = forecast_quality * data_completeness * stability_score
+rank_score = 0.40 * impact_score + 0.40 * urgency_score + 0.20 * confidence_score
+```
+
+Scores are rounded to six decimals. Existing within-type economic midranks and
+deterministic tie-breaks remain unchanged. Urgency means urgency **to act**: a
+deadline at or before the observation date scores 1; 28 or more days of slack scores
+0. It is independent of execution feasibility. An unknown prerequisite remains
+unknown and cannot authorize execution. Detail retains the existing action catalogue,
+stage ranges, and feasibility evidence.
+
+The assumed start-by date is `observation_date + decision_slack_days`, not the
+visitor's clock. `urgency_basis` distinguishes `assumed_conservative_action` from
+`declared_review_allowance`; `urgency_action` identifies the assumption. Excess and
+deceleration use the declared review/replan allowance until an intervention catalogue
+exists. Material-impact timing (including the demand half-gap day) remains a heuristic,
+not an empirically validated deadline. Confidence is evidence quality, not probability;
+its product cannot exceed its weakest input (apart from rounding).
+
+Publication uses `deadline-urgency-v1`, `multiplicative-evidence-v1`, and
+`memento-signal-urgency-ranker-v2`. It binds the parent signal manifest SHA-256 and
+ID into the configuration hash, preserves the parent release, and publishes a new
+immutable derived release. Legacy `reaction_score` remains stored for compatibility,
+but is not the urgency axis or a ranking input. The API adds nullable timing fields;
+legacy releases are explicitly labeled legacy actionability rather than urgency.
+
+The current iteration cohort is a retained-value 10-item, 1,000-store six-month slice;
+the 90-item/2,000-store scope below describes the historical full-scale contract.
+
+## Additive investigation stock cover
+
+The independent `attention-investigation-stock-cover-v1` explanation contract uses
+`sum(published base demand across 28 days) / 4` as one fixed weekly reference rate.
+Equivalent weeks = selected stock / that rate. Historical stock is normalized using
+the same snapshot rate; this is not historical realized-demand WOS. Future stock
+already incorporates receipts; do not add them again. Zero reference demand produces
+null cover with `zero_reference_demand`, not infinity or invented depletion.
+
+This display measure lives in separate immutable investigation artifacts. It does
+not change signal forecasts, admission, targets, ranks, or metric versions. Weekly
+flows sum covered daily rows; opening/closing inventory are balances, not sums.
+Actual/projected partial weeks remain separate. The detail ledger exposes up to six
+decimal places rather than using the overview's compact numeric rounding.
+
+## Historical baseline contract (v1.0.0)
+
+The historical baseline formulas below retain their original meaning.
 
 ## Purpose
 

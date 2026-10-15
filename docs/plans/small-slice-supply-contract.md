@@ -70,7 +70,7 @@ uses typical planned arrivals, at least one projected unfulfilled unit, and the
 existing valid-observation/completeness gates. Existing demand equations remain
 unchanged; inventory-excess projection uses the same typical planned inbound.
 
-## Actionability
+## Historical actionability policy (v1.1.0)
 
 Actions: expedite an existing shipment, release vendor stock, or request incremental
 production. Stage sums determine each action's duration range and typical/conservative
@@ -90,6 +90,21 @@ Legacy reaction days/slack are retained and labeled as legacy allowances. The de
 context supplies actual per-action stage ranges, slack, missing prerequisites, and the
 old reaction score for comparison. The current source contains no authority/capacity
 confirmations, so options are explanatory and conditional, not executable recommendations.
+
+## Current urgency priority policy (v1.2.0)
+
+The user-approved Attention change replaces reaction/actionability as a ranking
+dimension with urgency **to act**. Weights are impact 0.40, urgency 0.40, confidence
+0.20. Confidence is the product of the existing forecast-quality, completeness, and
+stability components. The declared formula and timing basis are controlled by
+`docs/product/mvp-metric-contract.md`, current policy section.
+
+Unknown prerequisites do not erase an assumed decision deadline, and urgency does
+not imply execution feasibility. A new immutable derivative of the existing signal
+release retains projections, economics, admission counts, feasibility, and evidence.
+No source or historical release is modified. Feed and graph expose the same overall
+top ten with native dollar impact and conservative start-by timing; the original
+website styling and blue/orange accents remain intact.
 
 ## Publication, API, and UI
 

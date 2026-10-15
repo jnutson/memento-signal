@@ -32,12 +32,15 @@ never becomes a confirmed actionable recommendation. Sales-scale validation does
 not establish calibrated demand paths, operational lead times, or commercial readiness.
 The acceptance report retains the original mis-scaled run and the corrected rerun.
 
-The restored frontend opens at `/attention` (also the home-page destination): its
-3D scene, ranked OOS baseline, selection cards, and planning/evidence drill-down
-remain backed by the published prediction artifacts. The sidebar also links to
-`/signal` for the newer supply-aware three-signal queue. These are distinct published
-views, not interchangeable ranks. Overview, Forecast, standalone Plan and Reports
-were never imported; restoring those requires the original prototype source.
+The frontend ports the `memento-website` Next.js demo's original shell, editorial
+and Attention styles, font, and complete spatial renderer, with three pages:
+`/monday` (home and current signal briefing), `/attention`
+(supply-aware three-signal queue, 3D exploration, and complete evidence), and
+`/reports` (current release coverage, separate economic bases, and provenance).
+`/signal` redirects to Attention for existing bookmarks. The committed-order OOS
+baseline remains available through its read-only API, but is not mixed into the new
+queue. Weekly POS comparisons and historical report archives are not yet served;
+the UI explicitly discloses these gaps rather than importing prototype sample data.
 
 ```bash
 python -m venv .venv
@@ -78,7 +81,39 @@ artifacts and never invokes metric or ranking code.
 
 ## Memento Signal interface
 
-The `web/` application is the single-pane Memento Signal workflow. It consumes
+Attention now includes a progressively disclosed investigation workspace for all four
+metric directions. After publishing a synthetic signal release, publish its immutable
+investigation artifacts separately:
+
+```bash
+.venv/bin/python -m memento.investigation --data-root data
+.venv/bin/python -m tools.verify_investigation --data-root data
+```
+
+The publisher is offline and synthetic-only; it never modifies the source or signal
+release/current pointer. The API serves validated, release-bound chart and ledger
+records without recomputing the signal engine per request. See
+[`docs/plans/attention-investigation-ux.md`](docs/plans/attention-investigation-ux.md).
+
+The current Attention priority policy is impact/urgency/confidence **40/40/20**.
+Urgency means urgency to act based on the conservative start-by deadline; execution
+feasibility remains separate. Confidence multiplies forecast quality, completeness,
+and stability. Feed and graph share the same immutable top-ten ranking and expose
+native dollar impact. See the current v1.2.0 section of the metric contract.
+
+To derive this policy from an existing synthetic baseline signal release without
+recomputing forecasts or changing source data:
+
+```bash
+.venv/bin/python -m memento.attention_priority \
+  data/signals/BASELINE_SIGNAL_SET_ID/manifest.json --data-root data
+```
+
+This publishes a new immutable signal release, preserving the original and binding
+its manifest hash into the new configuration. It intentionally accepts only a
+baseline release with a synthetic canonical dataset, not an already-prioritized one.
+
+The `web/` application contains Monday, Attention, and Reports. It consumes
 the immutable queue through a local FastAPI adapter; Python response models enforce the
 server contract and frontend Zod schemas validate every JSON payload before it reaches
 React.
@@ -93,7 +128,7 @@ npm install
 npm run dev
 ```
 
-Open `http://127.0.0.1:3000/signal`. Next.js proxies same-origin `/api/signals`
+Open `http://127.0.0.1:3000/monday`. Next.js proxies same-origin `/api/signals`
 requests to the loopback service at `http://127.0.0.1:8000`; override the service origin
 with `MEMENTO_API_ORIGIN` when needed. The API is read-only and does not recompute ranks,
 scores, sensitivity paths, or recommendations.

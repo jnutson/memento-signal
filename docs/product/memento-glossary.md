@@ -2,7 +2,36 @@
 
 Status: accepted terminology for MVP implementation
 
-Glossary version: `memento-glossary-v1.4.0`
+Glossary version: `memento-glossary-v1.6.0`
+
+## Investigation terms
+
+- **Equivalent weeks of supply:** stock divided by the fixed snapshot projected
+  average weekly base demand (`28-day base total / 4`). Not a historical realized
+  cover metric; null when reference demand is zero.
+- **Weekly inventory balance:** the opening/closing point-in-time balance. Never
+  the sum of daily stock. Sales, receipts, projected demand, and lost units are flows.
+- **Published baseline:** the frozen forward demand underlying a signal; it can
+  already include forecast correction and is not necessarily the raw retailer forecast.
+- **Qualifying history:** the actual retail weeks and matched pre-target forecast
+  vintages used by the signal producer. Excluded weeks remain visible with evidence notes.
+- **Investigation:** release-bound Situation → Explanation → Numbers, with chart
+  selection synchronized to the weekly ledger and expandable daily evidence.
+
+## Current Attention priority terms
+
+| Term | Definition |
+| --- | --- |
+| Urgency | Urgency to act, increasing as the conservative start-by deadline approaches. Independent of execution feasibility. |
+| Decision lead time | Shortest conservative potentially-applicable action duration, or an explicitly labeled review/replan allowance. |
+| Decision slack | Material-impact days minus decision lead time; a negative value means the assumed start-by date has passed at the observation snapshot. |
+| Urgency score | `clamp(1 - decision_slack_days / 28, 0, 1)` in `deadline-urgency-v1`. |
+| Evidence confidence | Forecast quality × data completeness × stability in urgency-policy releases; not probability. |
+| Priority score | 40% within-type economic impact + 40% urgency + 20% evidence confidence. |
+| Legacy reaction/actionability | Historical timing-feasibility component retained for reproducibility, not renamed urgency. |
+
+The reaction and additive confidence terms in the legacy prediction glossary below
+continue to describe historical OOS releases, not the current Attention policy.
 
 ## Purpose and authority
 

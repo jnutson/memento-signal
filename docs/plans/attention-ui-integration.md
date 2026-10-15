@@ -1,8 +1,15 @@
 # Attention UI Integration Plan
 
-Status: proposed implementation direction
+Status: historical OOS integration direction
 Scope: local synthetic-data MVP demo
 Authority: the implemented prediction and serving contracts remain authoritative
+
+The current layered detail UX is specified in
+[Attention investigation UX and implementation plan](attention-investigation-ux.md).
+That plan supersedes this document's single-pane navigation, Reaction terminology,
+stock-cover prohibition, and detail presentation for the current three-signal product.
+This document remains historical context; do not use it to remove Monday/Reports,
+replace Urgency with Reaction, or restore the static evidence-only detail experience.
 
 ## Goal
 

@@ -11,6 +11,7 @@ const nextConfig = {
       { source: "/api/attention/:predictionId", destination: `${apiOrigin}/v1/attention/:predictionId` },
       { source: "/api/signals", destination: `${apiOrigin}/v1/signals` },
       { source: "/api/signals/:signalId", destination: `${apiOrigin}/v1/signals/:signalId` },
+      { source: "/api/signals/:signalId/investigation", destination: `${apiOrigin}/v1/signals/:signalId/investigation` },
     ];
   },
 };

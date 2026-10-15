@@ -7,10 +7,11 @@ from pathlib import Path
 
 import uvicorn
 
-from conftest import build_attention_release_set
+from investigation_fixture import build_canonical, build_model
 from memento.api import create_app
-from memento.orchestrator import ingest
 from memento.signals import run_signals
+from memento.attention_priority import prioritize
+from memento.investigation import publish
 
 
 def main() -> None:
@@ -23,19 +24,17 @@ def main() -> None:
 
     with tempfile.TemporaryDirectory(prefix="memento-attention-e2e-") as directory:
         fixture_root = Path(directory).resolve()
-        manifest_path = build_attention_release_set(fixture_root)
         data_root = fixture_root / "runtime-data"
-        canonical_path = ingest(
-            manifest_path,
-            data_root=data_root,
-            classification="synthetic",
-        )
-        run_signals(
+        canonical_path = build_canonical(data_root)
+        baseline_path = run_signals(
             canonical_path,
             data_root=data_root,
             annual_carrying_cost_rate=Decimal("0.20"),
             carrying_rate_version="synthetic-browser-test-rate-v1",
+            supply_model_path=build_model(data_root),
         )
+        prioritize(baseline_path / "manifest.json", data_root=data_root)
+        publish(data_root)
         uvicorn.run(
             create_app(data_root),
             host=args.host,

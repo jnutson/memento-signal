@@ -6,7 +6,7 @@ from .metrics import impact_scores, rank_score
 from .signal_contract import SIGNAL_TYPE_ORDER, decimal_value
 
 
-def rank_signal_candidates(candidates: list[dict[str, object]]) -> list[dict[str, object]]:
+def rank_signal_candidates(candidates: list[dict[str, object]], *, urgency_policy: bool = False) -> list[dict[str, object]]:
     """Assign type-relative impact and immutable overall/type ranks in place."""
     grouped: dict[str, list[dict[str, object]]] = defaultdict(list)
     for row in candidates:
@@ -19,7 +19,8 @@ def rank_signal_candidates(candidates: list[dict[str, object]]) -> list[dict[str
         scores = impact_scores([float(row["primary_economic_value"]) for row in rows])
         for row, impact in zip(rows, scores, strict=True):
             row["impact_score"] = decimal_value(impact, 6)
-            row["rank_score"] = decimal_value(rank_score(impact, float(row["reaction_score"]), float(row["confidence_score"])), 6)
+            priority = (0.40 * impact + 0.40 * float(row["urgency_score"]) + 0.20 * float(row["confidence_score"])) if urgency_policy else rank_score(impact, float(row["reaction_score"]), float(row["confidence_score"]))
+            row["rank_score"] = decimal_value(priority, 6)
         rows.sort(key=lambda row: (-float(row["rank_score"]), -float(row["primary_economic_value"]), int(row["days_until_material_impact"]), str(row["store_id"]), str(row["product_id"]), str(row["signal_id"])))
         for position, row in enumerate(rows, 1):
             row["signal_type_rank_position"] = position

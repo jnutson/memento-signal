@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import duckdb
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -12,6 +13,11 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, model_validator
 
 from .serving import PredictionStore, SignalStore, SIGNAL_ID
+from .signal_contract import PRIORITY_FIELDS, URGENCY_RANKER_VERSION
+from .investigation_contract import Investigation
+from .investigation import read_investigation
+
+OPTIONAL_PRIORITY_FIELDS = {name for name, _ in PRIORITY_FIELDS}
 
 
 API_CONTRACT_VERSION = "memento-attention-api-v1"
@@ -168,6 +174,10 @@ class SignalRunMetadata(WireModel):
     configuration_hash: str
     calibration_status: str | None = None
     supply_projection_counts: dict[str, Annotated[int, Field(ge=0)]] | None = None
+    priority_policy: str | None = None
+    confidence_policy: str | None = None
+    source_signal_set_id: str | None = None
+    ranking_weights: dict[str, WireDecimal] | None = None
 
 
 class SignalRow(WireModel):
@@ -195,9 +205,24 @@ class SignalRow(WireModel):
     rank_score: Score
     overall_rank_position: Annotated[int, Field(ge=1)]
     signal_type_rank_position: Annotated[int, Field(ge=1)]
+    urgency_score: Score | None = None
+    decision_slack_days: int | None = None
+    decision_lead_time_days: Annotated[int, Field(ge=0)] | None = None
+    urgency_basis: Literal["assumed_conservative_action", "declared_review_allowance"] | None = None
+    urgency_action: Annotated[str, Field(min_length=1)] | None = None
 
     @model_validator(mode="after")
     def validate_type_specific_contract(self) -> "SignalRow":
+        timing = (self.urgency_score, self.decision_slack_days, self.decision_lead_time_days, self.urgency_basis, self.urgency_action)
+        if any(value is not None for value in timing):
+            if any(value is None for value in timing) or self.decision_slack_days != self.days_until_material_impact - cast(int, self.decision_lead_time_days):
+                raise ValueError("urgency timing must be complete and reconcile")
+            expected = max(Decimal(0), min(Decimal(1), Decimal(1) - Decimal(cast(int, self.decision_slack_days)) / Decimal(28))).quantize(Decimal("0.000001"))
+            if self.urgency_score != expected:
+                raise ValueError("urgency score must reconcile with deadline")
+            priority = (Decimal("0.4") * self.impact_score + Decimal("0.4") * cast(Decimal, self.urgency_score) + Decimal("0.2") * self.confidence_score).quantize(Decimal("0.000001"))
+            if abs(self.rank_score - priority) > Decimal("0.000001"):
+                raise ValueError("urgency priority must reconcile with weights")
         expected_direction = {"availability": {"risk"}, "demand_momentum": {"acceleration", "deceleration"}, "inventory_imbalance": {"excess"}}
         if self.signal_direction not in expected_direction[self.signal_type]:
             raise ValueError("signal direction does not match signal type")
@@ -246,6 +271,16 @@ class SignalDetailRow(SignalRow):
     signal_publication_version: str
     ranker_version: str
     configuration_hash: str
+
+    @model_validator(mode="after")
+    def priority_contract(self):
+        if self.ranker_version == URGENCY_RANKER_VERSION:
+            if self.urgency_score is None:
+                raise ValueError("urgency publication is missing urgency")
+            expected = (self.forecast_quality * self.data_completeness * self.stability_score).quantize(Decimal("0.000001"))
+            if abs(self.confidence_score - expected) > Decimal("0.000001"):
+                raise ValueError("multiplicative confidence does not reconcile")
+        return self
 
 
 class SupplyArrival(WireModel):
@@ -384,6 +419,8 @@ def _validate_queue_release(
 def _validate_signal_queue_release(
     manifest: dict[str, object], signals: list[dict[str, object]], signal_type: str | None,
 ) -> None:
+    if manifest.get("ranker_version") == URGENCY_RANKER_VERSION and any(row.get("urgency_score") is None for row in signals):
+        raise ValueError("urgency publication is incomplete")
     candidate_count = int(cast(int,manifest["candidate_count"]))
     display_count = int(cast(int,manifest["display_count"]))
     counts = manifest["candidate_counts_by_type"]
@@ -592,7 +629,7 @@ def create_app(data_root: Path) -> FastAPI:
             identities = store.display_identities(rows) if rows else {}
             signals = []
             for row in rows:
-                payload = {name: row[name] for name in SignalRow.model_fields if name != "identity"}
+                payload = {name: row.get(name) if name in OPTIONAL_PRIORITY_FIELDS else row[name] for name in SignalRow.model_fields if name != "identity"}
                 signals.append(SignalRow.model_validate({**payload, "identity": identities[str(row["signal_id"])]}))
             run_values = {name: manifest.get(name) for name in SignalRunMetadata.model_fields}
             configuration = manifest.get("configuration", {})
@@ -600,6 +637,8 @@ def create_app(data_root: Path) -> FastAPI:
                 raise ValueError("invalid signal configuration")
             run_values.update(calibration_status=configuration.get("calibration_status"),
                               supply_projection_counts=configuration.get("projection_counts"))
+            run_values.update(priority_policy=configuration.get("priority_policy"), confidence_policy=configuration.get("confidence_policy"),
+                              source_signal_set_id=configuration.get("source_signal_set_id"), ranking_weights=configuration.get("weights"))
             run = SignalRunMetadata.model_validate(run_values)
             return SignalQueueResponse(run=run, signals=signals)
         except (FileNotFoundError, OSError, ValueError, KeyError, TypeError) as exc:
@@ -615,7 +654,7 @@ def create_app(data_root: Path) -> FastAPI:
             if row is None:
                 raise _signal_problem(404, "signal_not_found", "The signal is not in the current overall top ten.")
             identity = store.display_identities([row])[signal_id]
-            payload = {name: row[name] for name in SignalDetailRow.model_fields if name != "identity"}
+            payload = {name: row.get(name) if name in OPTIONAL_PRIORITY_FIELDS else row[name] for name in SignalDetailRow.model_fields if name != "identity"}
             detail = SignalDetailRow.model_validate({**payload, "identity": identity})
             evidence = [SignalEvidenceRow.model_validate(item) for item in store.evidence(signal_id)]
             _validated_signal_evidence(detail, evidence)
@@ -629,6 +668,26 @@ def create_app(data_root: Path) -> FastAPI:
             raise _signal_problem(503, "release_integrity_error", "The Memento Signal release failed integrity validation.") from exc
         except (FileNotFoundError, OSError, KeyError, TypeError) as exc:
             raise _signal_problem(503, "release_integrity_error", "The Memento Signal release failed integrity validation.") from exc
+
+    @app.get("/v1/signals/{signal_id}/investigation", response_model=Investigation)
+    def signal_investigation(signal_id: str, signal_set_id: str) -> Investigation:
+        if not SIGNAL_ID.fullmatch(signal_id):
+            raise _signal_problem(422, "invalid_signal_id", "The signal identifier is invalid.")
+        try:
+            release, manifest = signal_store().current_release()
+            if signal_set_id != manifest["signal_set_id"]:
+                raise _signal_problem(409, "release_changed", "The release changed. Reload Attention to continue.")
+            with duckdb.connect() as connection:
+                found = connection.execute("SELECT count(*) FROM read_parquet(?) WHERE signal_id=? AND is_overall_top_10", [str(release / "signal.parquet"),signal_id]).fetchone()
+            if not found or found[0] != 1:
+                raise _signal_problem(404, "signal_not_found", "The signal is not in the current overall top ten.")
+            return read_investigation(data_root.resolve(), release, manifest, signal_id)
+        except ApiProblem:
+            raise
+        except FileNotFoundError as exc:
+            raise _signal_problem(404, "investigation_unavailable", "Visual investigation has not been published for this release.") from exc
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise _signal_problem(503, "release_integrity_error", "The investigation failed integrity validation.") from exc
 
     return app
 

@@ -8,8 +8,10 @@ async function validated<T>(url: string, schema: ZodType<T>, signal?: AbortSigna
   return schema.parse(payload);
 }
 
-export function fetchSignalQueue(type?: SignalType, signal?: AbortSignal): Promise<SignalQueue> {
-  return validated(`/api/signals${type ? `?signal_type=${type}` : ""}`, signalQueueSchema, signal);
+export async function fetchSignalQueue(type?: SignalType, signal?: AbortSignal): Promise<SignalQueue> {
+  const queue = await validated(`/api/signals${type ? `?signal_type=${type}` : ""}`, signalQueueSchema, signal);
+  if (!type && queue.signals.length !== queue.run.display_count) throw new Error("Published queue is incomplete.");
+  return queue;
 }
 
 export function fetchSignalDetail(id: string, signal?: AbortSignal): Promise<SignalDetail> {

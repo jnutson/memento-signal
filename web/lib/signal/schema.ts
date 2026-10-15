@@ -24,9 +24,21 @@ const signalObjectSchema = z.strictObject({
   minimum_reaction_days: z.number().int().nonnegative(), action_slack_days: z.number().int(),
   impact_score: score, reaction_score: score, confidence_score: score, rank_score: score,
   overall_rank_position: z.number().int().positive(), signal_type_rank_position: z.number().int().positive(),
+  urgency_score: score.nullable().optional(), decision_slack_days: z.number().int().nullable().optional(),
+  decision_lead_time_days: z.number().int().nonnegative().nullable().optional(),
+  urgency_basis: z.enum(["assumed_conservative_action", "declared_review_allowance"]).nullable().optional(),
+  urgency_action: z.string().min(1).nullable().optional(),
 });
 
 function validateSignalFields(value: z.infer<typeof signalObjectSchema>, context: z.RefinementCtx) {
+  const timing = [value.urgency_score, value.decision_slack_days, value.decision_lead_time_days, value.urgency_basis, value.urgency_action];
+  if (timing.some((item) => item != null)) {
+    const complete = timing.every((item) => item != null);
+    const expected = Math.max(0, Math.min(1, 1 - (value.decision_slack_days ?? 0) / 28));
+    if (!complete || value.decision_slack_days !== value.days_until_material_impact - (value.decision_lead_time_days ?? 0) || Math.abs(Number(value.urgency_score) - expected) > .000001) context.addIssue({ code: "custom", path: ["urgency_score"], message: "Urgency must reconcile with complete decision timing" });
+    const priority = .4 * Number(value.impact_score) + .4 * Number(value.urgency_score) + .2 * Number(value.confidence_score);
+    if (Math.abs(Number(value.rank_score) - priority) > .000001) context.addIssue({ code: "custom", path: ["rank_score"], message: "Priority must reconcile with published weights" });
+  }
   const directions = { availability: ["risk"], demand_momentum: ["acceleration", "deceleration"], inventory_imbalance: ["excess"] } as const;
   if (!(directions[value.signal_type] as readonly string[]).includes(value.signal_direction)) context.addIssue({ code: "custom", path: ["signal_direction"], message: "Direction must match signal type" });
   const inventoryValues = [value.estimated_cost_impact_amount, value.inventory_cost_exposed_amount, value.carrying_cost_28d_amount];
@@ -46,9 +58,12 @@ export const signalQueueSchema = z.strictObject({
     metric_contract_version: z.string(), signal_publication_version: z.string(), ranker_version: z.string(), configuration_hash: z.string(),
     calibration_status: z.string().nullable().optional(),
     supply_projection_counts: z.record(z.string(), z.number().int().nonnegative()).nullable().optional(),
+    priority_policy: z.string().nullable().optional(), confidence_policy: z.string().nullable().optional(),
+    source_signal_set_id: z.string().nullable().optional(), ranking_weights: z.record(z.string(), score).nullable().optional(),
   }),
   signals: z.array(signalSchema).max(10),
 }).superRefine((value, context) => {
+  if (value.run.ranker_version === "memento-signal-urgency-ranker-v2" && value.signals.some((row) => row.urgency_score == null)) context.addIssue({ code: "custom", path: ["signals"], message: "Urgency release requires urgency scores" });
   if (Object.values(value.run.candidate_counts_by_type).reduce((sum, count) => sum + count, 0) !== value.run.candidate_count) context.addIssue({ code: "custom", path: ["run", "candidate_counts_by_type"], message: "Candidate counts must reconcile" });
   const ranks = new Set<number>();
   for (let index = 1; index < value.signals.length; index += 1) {
@@ -92,6 +107,11 @@ export const signalDetailSchema = z.strictObject({
   evidence: z.array(evidence),
   supply_context: supplyContext.nullable().optional(),
 }).superRefine((value, context) => {
+  if (value.signal.ranker_version === "memento-signal-urgency-ranker-v2") {
+    const signal = value.signal;
+    const expected = Number(signal.forecast_quality) * Number(signal.data_completeness) * Number(signal.stability_score);
+    if (signal.urgency_score == null || Math.abs(Number(signal.confidence_score) - expected) > .000001) context.addIssue({ code: "custom", path: ["signal"], message: "Urgency and multiplicative confidence must match the new publication" });
+  }
   if (value.evidence.some((row) => row.signal_id !== value.signal.signal_id)) context.addIssue({ code: "custom", path: ["evidence"], message: "Evidence identity must match signal" });
   if (value.signal.signal_type === "demand_momentum") {
     const historical = value.evidence.filter((row) => row.evidence_type === "historical_week" && row.path === null);

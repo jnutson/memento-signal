@@ -1,7 +1,29 @@
 # Memento Signal Three-Metric MVP — Product Shape
 
 Status: accepted product direction
-Contract version: `memento-signal-product-v1.0.0`
+Contract version: `memento-signal-product-v1.1.0`
+
+## Current Attention experience
+
+Selected signals now open a three-layer investigation inside Attention: Situation
+(one primary chart), Explanation (selected-date mechanics), and Numbers (linked weekly
+ledger with daily expansion). Availability, acceleration, deceleration, and excess
+have distinct truthful visuals. The graph/feed queue, original styling, immutable
+ranking, and Monday/Attention/Reports navigation are preserved. See
+`docs/plans/attention-investigation-ux.md` for the implemented target UX and boundaries.
+
+Monday, Attention, and Reports retain the original website demo's visual design.
+Attention can toggle between the spatial graph and a priority-ordered feed of the
+same overall top ten. Both expose native financial impact; selecting a signal opens
+its full evidence, supply assumptions, feasibility prerequisites, and lineage.
+
+The dimensions are **Impact, Urgency, Confidence**. Urgency means urgency to act,
+not verified ability to execute. The current metric contract v1.2.0 uses 40% impact,
+40% urgency, and 20% multiplicative evidence confidence. Review/replan allowances
+are labeled, and unknown prerequisites remain non-executable. Historical releases
+retain explicitly labeled legacy actionability. The availability compatibility and
+baseline formula sections below document the original v1.0.0 contract, not the
+current urgency priority policy.
 
 The formulas and numeric defaults behind this product shape are defined in
 `docs/product/mvp-metric-contract.md`. Terms are governed by

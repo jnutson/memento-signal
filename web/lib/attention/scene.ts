@@ -16,6 +16,24 @@ export type AttentionScene = {
 const SIZE = 1.55;
 const HOME = { yaw: 0.72, pitch: 0.42, distance: 8.4 };
 
+// Soft, camera-facing orbs match the website demo without moving published coordinates.
+function glowTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 128;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Canvas rendering unavailable");
+  const gradient = context.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gradient.addColorStop(0, "rgba(10,79,176,.95)");
+  gradient.addColorStop(.25, "rgba(10,122,255,.75)");
+  gradient.addColorStop(.55, "rgba(90,168,255,.3)");
+  gradient.addColorStop(1, "rgba(130,190,255,0)");
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, 128, 128);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 export function createScene(host: HTMLElement, callbacks: SceneCallbacks = {}): AttentionScene {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xffffff);
@@ -40,6 +58,10 @@ export function createScene(host: HTMLElement, callbacks: SceneCallbacks = {}): 
   ] as const).forEach(([direction, text]) => {
     const point = origin.clone().addScaledVector(direction, SIZE * 2 + 0.28);
     scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([origin, point]), axisMaterial));
+    const arrow = new THREE.Mesh(new THREE.ConeGeometry(.035, .12, 12), new THREE.MeshBasicMaterial({ color: 0x1d1d1f }));
+    arrow.position.copy(point);
+    arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+    scene.add(arrow);
     const label = document.createElement("span");
     label.textContent = text;
     label.style.cssText = "position:absolute;white-space:nowrap;transform:translate(-50%,-50%)";
@@ -50,10 +72,14 @@ export function createScene(host: HTMLElement, callbacks: SceneCallbacks = {}): 
   const grid = new THREE.GridHelper(SIZE * 2, 4, 0xdcdce0, 0xececef);
   grid.position.y = -SIZE;
   scene.add(grid);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(SIZE * 2, SIZE * 2), new THREE.MeshBasicMaterial({ color: 0xf7f8fa }));
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.y = -SIZE - .005;
+  scene.add(floor);
 
-  const orbGeometry = new THREE.SphereGeometry(0.105, 28, 20);
+  const glow = glowTexture();
   const hitGeometry = new THREE.SphereGeometry(0.2, 12, 8);
-  const orbs = new Map<string, { group: THREE.Group; material: THREE.MeshBasicMaterial; hit: THREE.Mesh; title: string }>();
+  const orbs = new Map<string, { group: THREE.Group; material: THREE.SpriteMaterial; hit: THREE.Mesh; title: string; drop: THREE.Line }>();
   let selected: string | null = null;
   let hovered: string | null = null;
   let yaw = HOME.yaw;
@@ -74,19 +100,28 @@ export function createScene(host: HTMLElement, callbacks: SceneCallbacks = {}): 
   };
 
   const setItems = (items: SceneItem[]) => {
-    for (const orb of orbs.values()) scene.remove(orb.group);
+    for (const orb of orbs.values()) {
+      scene.remove(orb.group, orb.drop);
+      orb.material.dispose();
+      (orb.hit.material as THREE.Material).dispose();
+      orb.drop.geometry.dispose();
+      (orb.drop.material as THREE.Material).dispose();
+    }
     orbs.clear();
     for (const item of items) {
       const group = new THREE.Group();
       group.position.set(item.world[0] * SIZE, item.world[1] * SIZE, item.world[2] * SIZE);
-      const material = new THREE.MeshBasicMaterial({ color: 0x0a7aff });
-      const core = new THREE.Mesh(orbGeometry, material);
-      const halo = new THREE.Mesh(new THREE.SphereGeometry(0.17, 20, 14), new THREE.MeshBasicMaterial({ color: 0x77b8ff, transparent: true, opacity: 0.2, depthWrite: false }));
+      const material = new THREE.SpriteMaterial({ map: glow, transparent: true, depthWrite: false });
+      const core = new THREE.Sprite(material);
+      core.scale.set(.48, .48, 1);
       const hit = new THREE.Mesh(hitGeometry, new THREE.MeshBasicMaterial({ visible: false }));
       hit.userData.id = item.id;
-      group.add(halo, core, hit);
+      group.add(core, hit);
       scene.add(group);
-      orbs.set(item.id, { group, material, hit, title: item.title });
+      const drop = new THREE.Line(new THREE.BufferGeometry().setFromPoints([group.position, new THREE.Vector3(group.position.x, -SIZE, group.position.z)]), new THREE.LineDashedMaterial({ color: 0x0a7aff, dashSize: .04, gapSize: .05, transparent: true, opacity: .2 }));
+      drop.computeLineDistances();
+      scene.add(drop);
+      orbs.set(item.id, { group, material, hit, title: item.title, drop });
     }
     if (selected && !orbs.has(selected)) selected = null;
     refreshStyles();
@@ -194,8 +229,15 @@ export function createScene(host: HTMLElement, callbacks: SceneCallbacks = {}): 
       renderer.domElement.removeEventListener("pointercancel", onPointerUp);
       renderer.domElement.removeEventListener("wheel", onWheel);
       renderer.dispose();
-      orbGeometry.dispose();
+      scene.traverse((object) => {
+        if (object instanceof THREE.Mesh || object instanceof THREE.Line || object instanceof THREE.Sprite) {
+          if ("geometry" in object) object.geometry.dispose();
+          const materials = Array.isArray(object.material) ? object.material : [object.material];
+          materials.forEach((material) => material.dispose());
+        }
+      });
       hitGeometry.dispose();
+      glow.dispose();
       host.replaceChildren();
     },
   };
