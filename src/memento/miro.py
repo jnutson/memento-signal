@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 import duckdb
 
+from .duckdb_utils import fetchone_required
 from .models import SourceInventory, ValidationResult
 from .walmart import _scan_sql
 
@@ -41,7 +43,8 @@ def validate_extension_data(
     walmart: SourceInventory,
 ) -> list[ValidationResult]:
     out: list[ValidationResult] = []
-    declared = {d["dataset_name"]: d for d in extension.manifest["datasets"]}
+    datasets = cast(list[dict[str, object]], extension.manifest["datasets"])
+    declared = {str(d["dataset_name"]): d for d in datasets}
     for name, columns in SOURCE_COLUMNS.items():
         scan = _scan_sql(extension, name)
         try:
@@ -51,19 +54,19 @@ def validate_extension_data(
             continue
         expected = list(zip(columns, SOURCE_TYPES[name], strict=True))
         out.append(ValidationResult("EXT_SCHEMA_EXACT", "PASS" if desc == expected else "FAIL", name, 0 if desc == expected else 1, "exact extension schema"))
-        count = con.execute(f"SELECT count(*) FROM {scan}").fetchone()[0]
+        count = fetchone_required(con.execute(f"SELECT count(*) FROM {scan}"))[0]
         out.append(ValidationResult("EXT_ROW_COUNT", "PASS" if count == declared[name]["row_count"] else "FAIL", name, 0 if count == declared[name]["row_count"] else 1, "row count reconciles"))
         key = ",".join(PRIMARY_KEYS[name])
-        dupes = con.execute(f"SELECT count(*)-count(DISTINCT ({key})) FROM {scan}").fetchone()[0]
+        dupes = fetchone_required(con.execute(f"SELECT count(*)-count(DISTINCT ({key})) FROM {scan}"))[0]
         out.append(ValidationResult("EXT_PRIMARY_KEY", "PASS" if dupes == 0 else "FAIL", name, int(dupes), "extension primary key unique"))
         required = [c for c in columns if c not in {"effective_to", "approved_to_ship_at", "dc_invoiced_at", "expected_store_receipt_date", "actual_store_receipt_at"}]
-        nulls = con.execute(f"SELECT count(*) FROM {scan} WHERE " + " OR ".join(f'"{c}" IS NULL' for c in required)).fetchone()[0]
+        nulls = fetchone_required(con.execute(f"SELECT count(*) FROM {scan} WHERE " + " OR ".join(f'"{c}" IS NULL' for c in required)))[0]
         out.append(ValidationResult("EXT_REQUIRED_NULL", "PASS" if nulls == 0 else "FAIL", name, int(nulls), "required extension values non-null"))
 
     dim, po, reaction, economics = (_scan_sql(extension, n) for n in SOURCE_COLUMNS)
     products, stores = _scan_sql(walmart, "omni_item_dimensions"), _scan_sql(walmart, "store_dim")
     as_of = str(extension.manifest.get("as_of") or extension.manifest.get("release_as_of") or walmart.manifest.get("as_of"))
-    observation_date = con.execute(f"SELECT max(bus_dt) FROM {_scan_sql(walmart, 'store_invt')}").fetchone()[0]
+    observation_date = fetchone_required(con.execute(f"SELECT max(bus_dt) FROM {_scan_sql(walmart, 'store_invt')}"))[0]
     checks = [
         ("EXT_ITEM_DOMAIN", f"SELECT count(*) FROM {dim} WHERE company_id<>'MIRO_TOYS' OR display_brand_id<>'MIRO_SPARK' OR effective_to<effective_from", "dim_item"),
         ("EXT_ITEM_REFERENCE", f"SELECT count(*) FROM {dim} d LEFT JOIN {products} p USING(op_cmpny_cd,wm_item_nbr) WHERE p.wm_item_nbr IS NULL OR p.brand_nm<>'BRAND_A'", "dim_item"),
@@ -89,10 +92,10 @@ def validate_extension_data(
            AND e.effective_from<=DATE '{observation_date}' AND (e.effective_to IS NULL OR e.effective_to>=DATE '{observation_date}'))<>1""", "company_item_economics"),
     ]
     for rule, sql, dataset in checks:
-        count = con.execute(sql).fetchone()[0]
+        count = fetchone_required(con.execute(sql))[0]
         out.append(ValidationResult(rule, "PASS" if count == 0 else "FAIL", dataset, int(count), "extension semantic contract"))
     inventory = _scan_sql(walmart, "store_invt")
-    reconciliation = con.execute(f"""WITH versions AS (
+    reconciliation = fetchone_required(con.execute(f"""WITH versions AS (
           SELECT *,lag(received_qty,1,0) OVER(PARTITION BY retailer_order_id,order_line_nbr ORDER BY event_version) prior_received
           FROM {po} WHERE known_at<=TIMESTAMPTZ '{as_of}'
         ), latest AS (
@@ -114,7 +117,7 @@ def validate_extension_data(
           LEFT JOIN derived d USING(store_nbr,op_cmpny_cd,wm_item_nbr)
           LEFT JOIN receipts r USING(store_nbr,op_cmpny_cd,wm_item_nbr)
           WHERE i.bus_dt=DATE '{observation_date}'
-        ) SELECT coalesce(max(greatest(open_rate,transit_rate,receipt_rate)),0) FROM compared""").fetchone()[0]
+        ) SELECT coalesce(max(greatest(open_rate,transit_rate,receipt_rate)),0) FROM compared"""))[0]
     out.append(ValidationResult("EXT_INBOUND_RECONCILIATION", "PASS" if reconciliation <= 0.10 else "FAIL", "retailer_replenishment_commitment", 0 if reconciliation <= 0.10 else 1, "observation-date inbound states reconcile within tolerance"))
     return out
 

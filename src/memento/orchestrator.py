@@ -8,10 +8,12 @@ import shutil
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import cast
 
 import duckdb
 
 from .canonical import CONTRACT_VERSION, SCHEMAS
+from .duckdb_utils import fetchone_required
 from .manifest import canonical_json, inspect_manifest, sha256_file, validate_manifest_contract
 from .models import IngestionFailure, ValidationResult
 from .miro import MAPPING as MIRO_MAPPING, canonicalize_extension, validate_extension_data
@@ -78,12 +80,12 @@ def _canonical_validation(con: duckdb.DuckDBPyConnection, candidate: Path, expec
             if not exact:
                 schemas_valid = False
                 continue
-            optional_count = con.execute(f"SELECT count(*) FROM parquet_schema('{path}') WHERE name NOT IN ('duckdb_schema','schema') AND repetition_type <> 'REQUIRED'").fetchone()[0]
+            optional_count = fetchone_required(con.execute(f"SELECT count(*) FROM parquet_schema('{path}') WHERE name NOT IN ('duckdb_schema','schema') AND repetition_type <> 'REQUIRED'"))[0]
             out.append(ValidationResult("CAN_SCHEMA_REQUIRED", "PASS" if optional_count == 0 else "FAIL", table, int(optional_count), "canonical Parquet fields required"))
             required = " OR ".join(f'"{name}" IS NULL' for name, _ in SCHEMAS[table])
-            null_count = con.execute(f"SELECT count(*) FROM {scan} WHERE {required}").fetchone()[0]
+            null_count = fetchone_required(con.execute(f"SELECT count(*) FROM {scan} WHERE {required}"))[0]
             out.append(ValidationResult("CAN_REQUIRED_NULL", "PASS" if null_count == 0 else "FAIL", table, int(null_count), "required canonical values non-null"))
-            count, dupes = con.execute(f"SELECT count(*),count(*)-count(DISTINCT ({pk})) FROM {scan}").fetchone()
+            count, dupes = fetchone_required(con.execute(f"SELECT count(*),count(*)-count(DISTINCT ({pk})) FROM {scan}"))
             want = expected[table]
             out.append(ValidationResult("CAN_ROW_COUNT", "PASS" if count == want else "FAIL", table, 0 if count == want else 1, "source and canonical row counts reconcile"))
             out.append(ValidationResult("CAN_PRIMARY_KEY", "PASS" if dupes == 0 else "FAIL", table, int(dupes), "canonical primary key unique"))
@@ -94,9 +96,9 @@ def _canonical_validation(con: duckdb.DuckDBPyConnection, candidate: Path, expec
         return out
     base = lambda t: "read_parquet('" + str(candidate / t / "*.parquet").replace("'", "''") + "')"
     for table in ("sales_daily", "inventory_daily"):
-        count = con.execute(f"SELECT count(*) FROM {base(table)} f LEFT JOIN {base('calendar_day')} c ON f.business_date=c.calendar_date AND f.retail_year_week=c.retail_year_week LEFT JOIN {base('location')} l USING(location_id) LEFT JOIN {base('product')} p USING(product_id) WHERE c.calendar_date IS NULL OR l.location_id IS NULL OR p.product_id IS NULL").fetchone()[0]
+        count = fetchone_required(con.execute(f"SELECT count(*) FROM {base(table)} f LEFT JOIN {base('calendar_day')} c ON f.business_date=c.calendar_date AND f.retail_year_week=c.retail_year_week LEFT JOIN {base('location')} l USING(location_id) LEFT JOIN {base('product')} p USING(product_id) WHERE c.calendar_date IS NULL OR l.location_id IS NULL OR p.product_id IS NULL"))[0]
         out.append(ValidationResult("CAN_REFERENCES", "PASS" if count == 0 else "FAIL", table, int(count), "canonical references resolve"))
-    count = con.execute(f"SELECT count(*) FROM {base('demand_forecast_weekly')} f LEFT JOIN (SELECT DISTINCT retail_year_week FROM {base('calendar_day')}) c ON f.target_retail_year_week=c.retail_year_week LEFT JOIN {base('location')} l USING(location_id) LEFT JOIN {base('product')} p USING(product_id) WHERE c.retail_year_week IS NULL OR l.location_id IS NULL OR p.product_id IS NULL OR f.forecast_created_retail_year_week>=f.target_retail_year_week OR f.forecast_created_retail_year_week%100 NOT BETWEEN 1 AND 53").fetchone()[0]
+    count = fetchone_required(con.execute(f"SELECT count(*) FROM {base('demand_forecast_weekly')} f LEFT JOIN (SELECT DISTINCT retail_year_week FROM {base('calendar_day')}) c ON f.target_retail_year_week=c.retail_year_week LEFT JOIN {base('location')} l USING(location_id) LEFT JOIN {base('product')} p USING(product_id) WHERE c.retail_year_week IS NULL OR l.location_id IS NULL OR p.product_id IS NULL OR f.forecast_created_retail_year_week>=f.target_retail_year_week OR f.forecast_created_retail_year_week%100 NOT BETWEEN 1 AND 53"))[0]
     out.append(ValidationResult("CAN_REFERENCES", "PASS" if count == 0 else "FAIL", "demand_forecast_weekly", int(count), "canonical references and ordering valid"))
 
     semantic_checks = [
@@ -113,7 +115,7 @@ def _canonical_validation(con: duckdb.DuckDBPyConnection, candidate: Path, expec
         ("CAN_UPC_UNIQUE", "product", f"SELECT count(*)-count(DISTINCT upc) FROM {base('product')}"),
     ]
     for rule, table, sql in semantic_checks:
-        count = int(con.execute(sql).fetchone()[0])
+        count = int(fetchone_required(con.execute(sql))[0])
         out.append(ValidationResult(rule, "PASS" if count == 0 else "FAIL", table, count, "canonical semantic contract"))
     timezone_count = invalid_iana_timezone_row_count(con, base("location"), "timezone_name")
     out.append(ValidationResult("CAN_TIMEZONE_DOMAIN", "PASS" if timezone_count == 0 else "FAIL", "location", timezone_count, "timezone names belong to the IANA database"))
@@ -139,16 +141,16 @@ def _extension_canonical_validation(con: duckdb.DuckDBPyConnection, candidate: P
         description = [(row[0], row[1]) for row in con.execute(f"DESCRIBE SELECT * FROM {scan}").fetchall()]
         out.append(ValidationResult("CAN_SCHEMA_EXACT", "PASS" if description == SCHEMAS[table] else "FAIL", table, 0 if description == SCHEMAS[table] else 1, "exact canonical names, order, and types"))
         predicate = " OR ".join(f'"{name}" IS NULL' for name in sorted(required[table]))
-        nulls = con.execute(f"SELECT count(*) FROM {scan} WHERE {predicate}").fetchone()[0]
+        nulls = fetchone_required(con.execute(f"SELECT count(*) FROM {scan} WHERE {predicate}"))[0]
         out.append(ValidationResult("CAN_REQUIRED_NULL", "PASS" if nulls == 0 else "FAIL", table, int(nulls), "required canonical values non-null"))
-        count, dupes = con.execute(f"SELECT count(*),count(*)-count(DISTINCT ({pk})) FROM {scan}").fetchone()
+        count, dupes = fetchone_required(con.execute(f"SELECT count(*),count(*)-count(DISTINCT ({pk})) FROM {scan}"))
         out.append(ValidationResult("CAN_ROW_COUNT", "PASS" if count == expected[table] else "FAIL", table, 0 if count == expected[table] else 1, "source and canonical row counts reconcile"))
         out.append(ValidationResult("CAN_PRIMARY_KEY", "PASS" if dupes == 0 else "FAIL", table, int(dupes), "canonical primary key unique"))
     base = lambda table: "read_parquet('" + str(candidate / table / "*.parquet").replace("'", "''") + "')"
     for table in ("company_item", "replenishment_commitment"):
-        count = con.execute(f"SELECT count(*) FROM {base(table)} x LEFT JOIN {base('product')} p USING(product_id) " + (f"LEFT JOIN {base('location')} l USING(location_id) " if table == "replenishment_commitment" else "") + "WHERE p.product_id IS NULL" + (" OR l.location_id IS NULL" if table == "replenishment_commitment" else "")).fetchone()[0]
+        count = fetchone_required(con.execute(f"SELECT count(*) FROM {base(table)} x LEFT JOIN {base('product')} p USING(product_id) " + (f"LEFT JOIN {base('location')} l USING(location_id) " if table == "replenishment_commitment" else "") + "WHERE p.product_id IS NULL" + (" OR l.location_id IS NULL" if table == "replenishment_commitment" else "")))[0]
         out.append(ValidationResult("CAN_REFERENCES", "PASS" if count == 0 else "FAIL", table, int(count), "canonical references resolve"))
-    economics_count = con.execute(f"SELECT count(*) FROM {base('company_item_economics')} e LEFT JOIN {base('company_item')} i USING(company_id,company_item_id) WHERE i.company_item_id IS NULL").fetchone()[0]
+    economics_count = fetchone_required(con.execute(f"SELECT count(*) FROM {base('company_item_economics')} e LEFT JOIN {base('company_item')} i USING(company_id,company_item_id) WHERE i.company_item_id IS NULL"))[0]
     out.append(ValidationResult("CAN_REFERENCES", "PASS" if economics_count == 0 else "FAIL", "company_item_economics", int(economics_count), "canonical economics references resolve"))
     return out
 
@@ -157,7 +159,7 @@ def _manifest_files(con: duckdb.DuckDBPyConnection, candidate: Path) -> list[dic
     files: list[dict[str, object]] = []
     for path in sorted(candidate.glob("*/*.parquet")):
         scan = str(path).replace("'", "''")
-        rows = con.execute(f"SELECT count(*) FROM read_parquet('{scan}')").fetchone()[0]
+        rows = fetchone_required(con.execute(f"SELECT count(*) FROM read_parquet('{scan}')"))[0]
         files.append({"path": str(path.relative_to(candidate)), "bytes": path.stat().st_size, "sha256": sha256_file(path), "rows": rows})
     return files
 
@@ -193,8 +195,10 @@ def ingest_release_set(manifest_path: Path, *, data_root: Path, classification: 
             return published
         canonicalize(con, source.walmart, candidate)
         canonicalize_extension(con, source.extension, candidate)
-        walmart_expected = {MAPPING[d["dataset_name"]]: d["row_count"] for d in source.walmart.manifest["datasets"]}
-        extension_expected = {MIRO_MAPPING[d["dataset_name"]]: d["row_count"] for d in source.extension.manifest["datasets"]}
+        walmart_datasets = cast(list[dict[str, object]], source.walmart.manifest["datasets"])
+        extension_datasets = cast(list[dict[str, object]], source.extension.manifest["datasets"])
+        walmart_expected = {MAPPING[str(d["dataset_name"])]: int(str(d["row_count"])) for d in walmart_datasets}
+        extension_expected = {MIRO_MAPPING[str(d["dataset_name"])]: int(str(d["row_count"])) for d in extension_datasets}
         canonical_results = _canonical_validation(con, candidate, walmart_expected) + _extension_canonical_validation(con, candidate, extension_expected)
         results.extend(canonical_results)
         _ensure_pass("canonical_validation", canonical_results)
@@ -293,7 +297,8 @@ def ingest(manifest_path: Path, *, data_root: Path, classification: str) -> Path
             ref.write_bytes(canonical_json({"manifest_path":str(inventory.manifest_path),"manifest_sha256":inventory.manifest_sha256,"release_id":inventory.manifest["release_id"],"classification":classification,"receipt_time":datetime.now(timezone.utc).isoformat(),"file_inventory_sha256":hashlib.sha256(canonical_json([{"path":f.path,"bytes":f.bytes,"sha256":f.sha256} for f in inventory.files])).hexdigest()}))
         LOG.info("event=canonicalizing run_id=%s dataset_id=%s", run_id, dataset_id)
         canonicalize(con, inventory, candidate)
-        expected = {MAPPING[d["dataset_name"]]: d["row_count"] for d in inventory.manifest["datasets"]}
+        datasets = cast(list[dict[str, object]], inventory.manifest["datasets"])
+        expected = {MAPPING[str(d["dataset_name"])]: int(str(d["row_count"])) for d in datasets}
         canonical_results = _canonical_validation(con, candidate, expected)
         results.extend(canonical_results)
         _ensure_pass("canonical_validation", canonical_results)
@@ -301,15 +306,15 @@ def ingest(manifest_path: Path, *, data_root: Path, classification: str) -> Path
         for path in sorted(candidate.glob("*/*.parquet")):
             table = path.parent.name
             scan = str(path).replace("'", "''")
-            rows = con.execute(f"SELECT count(*) FROM read_parquet('{scan}')").fetchone()[0]
+            rows = fetchone_required(con.execute(f"SELECT count(*) FROM read_parquet('{scan}')"))[0]
             if table in {"calendar_day"}:
-                lo, hi = con.execute(f"SELECT min(calendar_date),max(calendar_date) FROM read_parquet('{scan}')").fetchone()
+                lo, hi = fetchone_required(con.execute(f"SELECT min(calendar_date),max(calendar_date) FROM read_parquet('{scan}')"))
                 bounds = {"minimum_date":str(lo),"maximum_date":str(hi)}
             elif table in {"sales_daily", "inventory_daily"}:
-                lo, hi = con.execute(f"SELECT min(business_date),max(business_date) FROM read_parquet('{scan}')").fetchone()
+                lo, hi = fetchone_required(con.execute(f"SELECT min(business_date),max(business_date) FROM read_parquet('{scan}')"))
                 bounds = {"minimum_date":str(lo),"maximum_date":str(hi)}
             elif table == "demand_forecast_weekly":
-                lo, hi = con.execute(f"SELECT min(target_retail_year_week),max(target_retail_year_week) FROM read_parquet('{scan}')").fetchone()
+                lo, hi = fetchone_required(con.execute(f"SELECT min(target_retail_year_week),max(target_retail_year_week) FROM read_parquet('{scan}')"))
                 bounds = {"minimum_retail_year_week":lo,"maximum_retail_year_week":hi}
             else:
                 bounds = {}

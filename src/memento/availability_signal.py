@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .availability_inputs import AvailabilityInputs
+from .availability_contract import AvailabilityInputs
 from .signal_contract import CandidateBatch, Observation, common_signal_fields, decimal_value, stable_signal_id
 
 

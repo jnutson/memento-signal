@@ -1,4 +1,12 @@
-export type SceneItem = { id: string; title: string; /** position in [-1, 1]^3: [confidence, impact, urgency] */ w: [number, number, number] };
+export type SceneItem = {
+  id: string;
+  title: string;
+  /** position in [-1, 1]^3: [confidence, impact, urgency] */ w: [
+    number,
+    number,
+    number,
+  ];
+};
 
 export type SceneCallbacks = {
   onHover?: (id: string | null) => void;
@@ -18,4 +26,7 @@ export type AttentionScene = {
   dispose(): void;
 };
 
-export function createScene(host: HTMLElement, callbacks?: SceneCallbacks): AttentionScene;
+export function createScene(
+  host: HTMLElement,
+  callbacks?: SceneCallbacks,
+): AttentionScene;

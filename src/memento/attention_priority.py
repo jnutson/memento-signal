@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pyarrow.parquet as pq
 
-from .api import SupplyContext
+from .api_contract import SupplyContext
 from .manifest import sha256_file
 from .serving import safe_member, validate_release_files
 from .signal_contract import SIGNAL_SCHEMA, URGENCY_POLICY_VERSION, decimal_value

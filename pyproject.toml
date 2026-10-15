@@ -36,19 +36,7 @@ markers = [
 
 [tool.pyright]
 include = [
-  "src/memento/metrics.py",
-  "src/memento/signal_contract.py",
-  "src/memento/availability_inputs.py",
-  "src/memento/availability_signal.py",
-  "src/memento/demand_signal.py",
-  "src/memento/inventory_signal.py",
-  "src/memento/signals.py",
-  "src/memento/supply.py",
-  "src/memento/attention_priority.py",
-  "src/memento/investigation.py",
-  "src/memento/investigation_contract.py",
-  "src/memento/api.py",
-  "src/memento/serving.py",
+  "src/memento",
   "tools",
 ]
 exclude = ["**/__pycache__"]

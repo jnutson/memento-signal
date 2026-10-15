@@ -6,6 +6,7 @@ import stat
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
+from typing import Any, NoReturn, cast
 
 from .manifest import HEX64, canonical_json, sha256_file
 from .models import IngestionFailure, SourceInventory, ValidationResult
@@ -36,7 +37,7 @@ class ReleaseSetInventory:
     extension: SourceInventory
 
 
-def _failure(rule: str, summary: str) -> None:
+def _failure(rule: str, summary: str) -> NoReturn:
     raise IngestionFailure(
         "source_validation", [ValidationResult(rule, "FAIL", count=1, summary=summary)]
     )
@@ -85,7 +86,7 @@ def _package_inventory(path: Path, manifest: dict[str, object], classification: 
     files = []
     from .models import SourceFile
 
-    for dataset in datasets:
+    for dataset in cast(list[object], datasets):
         if not isinstance(dataset, dict) or not isinstance(dataset.get("dataset_name"), str):
             _failure("SET_PACKAGE_DATASET", "invalid package dataset entry")
         name = dataset["dataset_name"]
@@ -161,6 +162,7 @@ def validate_release_set(inventory: ReleaseSetInventory, *, now: datetime | None
         keys = {"version","parent_manifest_sha256","stores","items","core_start","core_end","model_sha256"}
         shape = isinstance(profile,dict) and set(profile)==keys and profile.get("version")=="unchanged-retail-slice-v1"
         if shape:
+            profile = cast(dict[str, Any], profile)
             shape = all(isinstance(profile.get(name),str) and bool(HEX64.fullmatch(profile[name])) for name in ("parent_manifest_sha256","model_sha256"))
             shape = shape and all(isinstance(profile.get(name),list) and bool(profile[name]) and
                 all(type(value) is int and value>=0 for value in profile[name]) and len(profile[name])==len(set(profile[name])) for name in ("stores","items"))
@@ -170,9 +172,11 @@ def validate_release_set(inventory: ReleaseSetInventory, *, now: datetime | None
                 shape = False
         check(bool(shape),"SET_SLICE_PROFILE","valid bounded slice identity")
         try:
+            profile_data = cast(dict[str, Any], profile)
             reference = s.get("supply_model")
-            if not isinstance(reference,dict) or set(reference)!={"path","sha256"} or not shape or reference["sha256"]!=profile["model_sha256"]:
+            if not isinstance(reference,dict) or set(reference)!={"path","sha256"} or not shape or reference["sha256"]!=profile_data["model_sha256"]:
                 raise ValueError("invalid model reference")
+            reference = cast(dict[str, Any], reference)
             release_root=inventory.manifest_path.parent.parent.parent.resolve(strict=True)
             model_path=_safe_reference(release_root,reference["path"],"SET_MODEL_PATH")
             if (release_root/reference["path"]).absolute()!=model_path:
@@ -184,8 +188,10 @@ def validate_release_set(inventory: ReleaseSetInventory, *, now: datetime | None
             check(True,"SET_SUPPLY_MODEL","hashed effective synthetic supply model")
         except (ValueError,TypeError,KeyError,OSError):
             check(False,"SET_SUPPLY_MODEL","hashed effective synthetic supply model")
-    wm_names = {d.get("dataset_name") for d in wm.get("datasets", []) if isinstance(d, dict)}
-    ext_names = {d.get("dataset_name") for d in ext.get("datasets", []) if isinstance(d, dict)}
+    wm_datasets = wm.get("datasets", [])
+    ext_datasets = ext.get("datasets", [])
+    wm_names = {d.get("dataset_name") for d in cast(list[dict[str, object]], wm_datasets) if isinstance(d, dict)}
+    ext_names = {d.get("dataset_name") for d in cast(list[dict[str, object]], ext_datasets) if isinstance(d, dict)}
     check(wm_names == WALMART_DATASETS, "SET_WALMART_DATASETS", "exact six Walmart datasets")
     check(ext_names == EXTENSION_DATASETS, "SET_EXTENSION_DATASETS", "exact four Miro datasets")
     check(wm.get("dataset_type") == "observable", "SET_WALMART_OBSERVABLE", "Walmart package is observable")

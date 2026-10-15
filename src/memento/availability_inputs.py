@@ -2,68 +2,27 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
-from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_EVEN
 from itertools import groupby
 from pathlib import Path
-from typing import Sequence, TypedDict, cast
+from typing import Sequence, cast
 
 import duckdb
+
+from .availability_contract import (
+    AvailabilityCandidate,
+    AvailabilityEvidence,
+    AvailabilityForecast,
+    AvailabilityInputs,
+)
+from .availability_forecasting import choose_bias, choose_wape
 from .manifest import sha256_file
 from .metrics import (
-    HORIZON_DAYS, bias_factor, confidence_score, data_completeness, demand_paths,
-    forecast_wape, normalize_weekday_shares, project_inventory, ProjectionDay,
-    timing_stability,
+    HORIZON_DAYS, ProjectionDay, confidence_score, data_completeness, demand_paths,
+    normalize_weekday_shares, project_inventory, timing_stability,
 )
 from .models import IngestionFailure, ValidationResult
-
-
-class AvailabilityCandidate(TypedDict):
-    candidate_key: str
-    observation_date: date
-    store_id: str
-    product_id: str
-    projected_depletion_date: date
-    estimated_lost_units: Decimal
-    estimated_lost_sales_amount: Decimal
-    days_until_depletion: int
-    minimum_reaction_days: int
-    forecast_quality: Decimal
-    data_completeness: Decimal
-    timing_stability_score: Decimal
-
-
-class AvailabilityEvidence(TypedDict):
-    candidate_key: str
-    projection_date: date
-    path: str
-    demand_units: Decimal
-    scheduled_inbound_units: Decimal
-    opening_units: Decimal
-    fulfilled_units: Decimal
-    lost_units: Decimal
-    projected_ending_on_hand_units: Decimal
-
-
-class AvailabilityForecast(TypedDict):
-    signal_as_of: datetime
-    store_id: str
-    product_id: str
-    target_retail_year_week: int
-    retailer_forecast_units: Decimal
-    forecast_bias_factor: Decimal
-    memento_weekly_demand_base: Decimal
-    forecast_wape: Decimal | None
-    fallback_level: str
-
-
-@dataclass(frozen=True)
-class AvailabilityInputs:
-    candidates: list[AvailabilityCandidate]
-    evidence: list[AvailabilityEvidence]
-    forecasts: list[AvailabilityForecast]
-    reason_codes: list[str]
 
 
 def _scan(root: Path, table: str) -> str:
@@ -90,43 +49,6 @@ def _require_canonical(root: Path) -> dict[str, object]:
         if not file.is_file() or file.is_symlink() or file.stat().st_size != entry["bytes"] or sha256_file(file) != entry["sha256"]:
             raise IngestionFailure("signal_input_validation", [ValidationResult("SIGNAL_CANONICAL_HASH", "FAIL", count=1, summary="canonical file does not match manifest")])
     return manifest
-
-
-def _stats_bias(stats: list[float], minimum_count: int) -> float | None:
-    count, actual, forecast = stats
-    if count < minimum_count or forecast <= 0:
-        return None
-    return min(max(actual / forecast, 0.5), 1.5)
-
-
-def _choose_bias(key, product_id, pairs_by_key, item_stats, brand_stats):
-    own = pairs_by_key.get(key, [])[-8:]
-    if len(own) >= 6 and bias_factor(own) is not None:
-        return bias_factor(own), "store_item"
-    item_bias = _stats_bias(item_stats[product_id], 20)
-    if item_bias is not None:
-        return item_bias, "item"
-    brand_bias = _stats_bias(brand_stats, 20)
-    if brand_bias is not None:
-        return brand_bias, "brand"
-    return 1.0, "default"
-
-
-def _stats_wape(stats: list[float], minimum_count: int) -> float | None:
-    count, actual, absolute_error = stats
-    if count < minimum_count or actual <= 0:
-        return None
-    return absolute_error / actual
-
-
-def _choose_wape(key, product_id, pairs_by_key, item_stats, brand_stats):
-    own = pairs_by_key.get(key, [])[-8:]
-    if len(own) >= 6:
-        return forecast_wape(own)
-    item_wape = _stats_wape(item_stats[product_id], 20)
-    if item_wape is not None:
-        return item_wape
-    return _stats_wape(brand_stats, 20)
 
 
 def build_availability_inputs(canonical_root: Path) -> AvailabilityInputs:
@@ -193,9 +115,7 @@ def build_availability_inputs(canonical_root: Path) -> AvailabilityInputs:
         group = list(week_group)
         frozen_group = []
         for location, product, _, actual, retailer in group:
-            historical_bias, _ = _choose_bias((location, product), product, pairs_by_key, raw_item_stats, raw_brand_stats)
-            if historical_bias is None:
-                raise ValueError("forecast bias fallback is unavailable")
+            historical_bias, _ = choose_bias((location, product), product, pairs_by_key, raw_item_stats, raw_brand_stats)
             frozen_group.append((location, product, (float(actual), float(retailer) * historical_bias), (float(actual), float(retailer))))
         for location, product, frozen, raw in frozen_group:
             frozen_by_key[(location, product)].append(frozen)
@@ -287,10 +207,8 @@ def build_availability_inputs(canonical_root: Path) -> AvailabilityInputs:
         if on_hand < 0 or price is None or price < 0 or not assorted or not replenishable or location_status not in {"O", "OPEN", "Open"}:
             reason_codes.append("availability_invalid_observation")
             continue
-        bias, fallback = _choose_bias(key, product, pairs_by_key, raw_item_stats, raw_brand_stats)
-        if bias is None:
-            raise ValueError("forecast bias fallback is unavailable")
-        wape = _choose_wape(key, product, frozen_by_key, frozen_item_stats, frozen_brand_stats)
+        bias, fallback = choose_bias(key, product, pairs_by_key, raw_item_stats, raw_brand_stats)
+        wape = choose_wape(key, product, frozen_by_key, frozen_item_stats, frozen_brand_stats)
         band = min(max(wape if wape is not None else 1.0, 0), 1)
         if len(pairs_by_key.get(key, [])) >= 4:
             shares = normalize_weekday_shares(weekday_key[key])

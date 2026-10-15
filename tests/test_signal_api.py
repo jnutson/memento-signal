@@ -5,7 +5,8 @@ from decimal import Decimal
 import pytest
 from fastapi.testclient import TestClient
 
-from memento.api import SIGNAL_API_CONTRACT_VERSION, SignalDetailRow, SignalEvidenceRow, _validate_signal_queue_release, _validated_signal_evidence, create_app
+from memento.api import SIGNAL_API_CONTRACT_VERSION, SignalDetailRow, SignalEvidenceRow, create_app
+from memento.api_validation import validate_signal_evidence, validate_signal_queue_release
 from memento.signals import run_signals
 from canonical_fixture import canonical_fixture
 
@@ -40,7 +41,7 @@ def test_signal_api_returns_immutable_rank_and_type_specific_detail(tmp_path: Pa
     detail_model = SignalDetailRow.model_validate(detail_payload["signal"])
     evidence_models = [SignalEvidenceRow.model_validate(row) for row in detail_payload["evidence"]]
     with pytest.raises(ValueError, match="complete 28-day paths"):
-        _validated_signal_evidence(detail_model, evidence_models[:-1])
+        validate_signal_evidence(detail_model, evidence_models[:-1])
 
 
 def test_signal_api_rejects_invalid_identifier(tmp_path: Path):
@@ -66,4 +67,4 @@ def test_signal_queue_integrity_rejects_duplicate_overall_ranks():
         {"signal_id": f"sig_{'b' * 64}", "signal_type": "demand_momentum", "overall_rank_position": 1},
     ]
     with pytest.raises(ValueError, match="unique and ordered"):
-        _validate_signal_queue_release(manifest, rows, None)
+        validate_signal_queue_release(manifest, rows, None)

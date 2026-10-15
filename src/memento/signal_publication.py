@@ -71,7 +71,7 @@ def publish_signal_set(
         files = []
         tables = [("signal.parquet", candidates, PRIORITY_SCHEMA if urgency_policy else SIGNAL_SCHEMA), ("signal_evidence.parquet", evidence, EVIDENCE_SCHEMA)]
         if supply_context is not None:
-            tables.append(("supply_context.parquet", supply_context, pa.schema([("signal_id", pa.string()), ("context", pa.string())])))
+            tables.append(("supply_context.parquet", [dict(row) for row in supply_context], pa.schema([("signal_id", pa.string()), ("context", pa.string())])))
         for name, rows, schema in tables:
             target = stage / name
             table = pa.Table.from_pylist(rows, schema=schema)

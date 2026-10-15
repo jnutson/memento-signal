@@ -8,10 +8,13 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
   title: "Memento Loop · Retail analytics",
-  description: "Monday briefings, ranked Attention, and reproducible retail reports",
+  description:
+    "Monday briefings, ranked Attention, and reproducible retail reports",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+export default function RootLayout({
+  children,
+}: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="en" className={inter.variable}>
       <body>

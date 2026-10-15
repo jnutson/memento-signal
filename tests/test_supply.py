@@ -8,7 +8,8 @@ import pytest
 from fastapi.testclient import TestClient
 from decimal import Decimal
 
-from memento.api import create_app, SupplyContext
+from memento.api import create_app
+from memento.api_contract import SupplyContext
 from memento.signals import run_signals
 from memento.supply import SupplyModel, arrival, order_arrivals, action_options, plan_replenishment, load_model
 from canonical_fixture import canonical_fixture

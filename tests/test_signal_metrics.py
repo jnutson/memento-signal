@@ -8,7 +8,8 @@ from memento.demand_signal import calculate_demand_momentum
 from memento.inventory_signal import calculate_inventory_imbalance
 from memento.metrics import project_inventory
 from memento.models import IngestionFailure
-from memento.signals import _daily_base_forecast, _load_observations, run_signals
+from memento.signals import run_signals
+from memento.signal_inputs import _load_observations, daily_base_forecast
 from memento.signal_ranking import rank_signal_candidates
 from canonical_fixture import canonical_fixture
 
@@ -68,7 +69,15 @@ def test_daily_base_forecast_uses_calendar_aligned_weekday_shares(tmp_path):
     future = [{"target_retail_year_week": week, "memento_weekly_demand_base": 7} for (week,) in weeks]
     weekday_inputs = ({("loc_test", "prd_test"): (4, [7, 0, 0, 0, 0, 0, 0])}, {}, (0, [0] * 7))
 
-    daily = _daily_base_forecast(connection, canonical, observation, future, weekday_inputs)
+    calendar_rows = [
+        (day, int(week), int(weekday))
+        for day, week, weekday in connection.execute(
+            "SELECT calendar_date,retail_year_week,calendar_weekday_number FROM read_parquet(?) "
+            "WHERE calendar_date BETWEEN DATE '2027-01-30' AND DATE '2027-02-26' ORDER BY calendar_date",
+            [str(canonical / "calendar_day" / "*.parquet")],
+        ).fetchall()
+    ]
+    daily = daily_base_forecast(observation, future, weekday_inputs, calendar_rows)
 
     assert len(daily) == 28
     assert sum(daily) == 28
