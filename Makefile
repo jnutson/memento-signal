@@ -1,7 +1,7 @@
 PYTHON ?= .venv/bin/python
 NPM ?= npm
 
-.PHONY: setup test-python python-typecheck typecheck lint format-check test-web build test-e2e test-e2e-fullstack verify verify-ci delivery-ready delivery-pr-check
+.PHONY: setup test-python python-typecheck typecheck lint format-check audit-dependencies test-web build test-e2e test-e2e-fullstack verify verify-ci delivery-ready delivery-pr-check
 
 setup:
 	python3 -m venv .venv
@@ -23,6 +23,9 @@ lint:
 format-check:
 	$(NPM) --prefix web run format:check
 
+audit-dependencies:
+	$(PYTHON) tools/verify_node_audit.py
+
 test-web:
 	$(NPM) --prefix web test
 
@@ -37,7 +40,7 @@ test-e2e-fullstack:
 
 verify: verify-ci
 
-verify-ci: test-python typecheck lint format-check test-web build test-e2e test-e2e-fullstack
+verify-ci: test-python typecheck lint format-check audit-dependencies test-web build test-e2e test-e2e-fullstack
 
 delivery-ready:
 	$(PYTHON) tools/delivery.py ready --base "$(or $(BASE),origin/main)" --verification "$(or $(VERIFICATION),no-db)"

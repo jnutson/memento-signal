@@ -58,8 +58,10 @@ make verify
 ```
 
 The full gate runs Python tests and type checking, frontend type checking and linting,
-unit tests, the production build, mocked browser flows, and the full browser-to-API-to-
-Parquet workflow.
+dependency security checks, unit tests, the production build, mocked browser flows,
+and the full browser-to-API-to-Parquet workflow. Runtime dependencies must be free of
+high or critical audit findings; any temporary development-tool exception is explicit
+and expiring.
 
 ## Current documentation
 

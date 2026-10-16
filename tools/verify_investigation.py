@@ -35,7 +35,7 @@ def verify(root: Path):
             lineage={key:saved.model_dump(mode="json")[key] for key in ("signal_set_id","canonical_dataset_id","signal_manifest_sha256","canonical_manifest_sha256","supply_model_sha256","configuration_hash","signal_as_of")}
             rebuilt=build_investigation(con,row,[e for e in evidence if e["signal_id"]==row["signal_id"]],contexts.get(row["signal_id"]),lineage)
             assert canonical_json(saved.model_dump(mode="json"))==canonical_json(rebuilt.model_dump(mode="json"))
-            response=client.get(f"/v1/signals/{row['signal_id']}/investigation",params={"signal_set_id":manifest["signal_set_id"]})
+            response=client.get(f"/v1/signals/{row['signal_id']}/investigation",params={"signal_set_id":str(manifest["signal_set_id"])})
             assert response.status_code==200 and response.json()==saved.model_dump(mode="json")
             sizes.append(len(response.content))
     assert before=={name:sha256_file(Path(name)) for name in before}
