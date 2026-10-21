@@ -10,9 +10,14 @@ const pages = [
   { href: "/monday", label: "Monday" },
   { href: "/attention", label: "Attention" },
   { href: "/reports", label: "Reports" },
+  { href: "/metrics", label: "Metrics" },
+  { href: "/signal", label: "Connected demo" },
 ];
 
 export default function Shell({ children }: Readonly<{ children: ReactNode }>) {
+  const pathname = usePathname();
+  // The connected demo uses Metrics, never the separately published legacy queue.
+  if (pathname === "/signal") return children;
   return (
     <ReleaseProvider>
       <ProductShell>{children}</ProductShell>
@@ -23,6 +28,7 @@ export default function Shell({ children }: Readonly<{ children: ReactNode }>) {
 function ProductShell({ children }: Readonly<{ children: ReactNode }>) {
   const pathname = usePathname();
   const { queue } = useRelease();
+  if (pathname === "/draft") return children;
   return (
     <div className={styles.shell}>
       <header className={styles.topbar}>

@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { run, signals } from "../signal-fixtures";
 
-test("opens Monday, Attention, and Reports with exactly three navigation pages", async ({
+test("preserves existing pages and exposes the Metrics navigation entry", async ({
   page,
 }) => {
   await page.route("**/api/signals", (route) =>
@@ -14,7 +14,13 @@ test("opens Monday, Attention, and Reports with exactly three navigation pages",
   const navigation = page.getByRole("navigation", {
     name: "Product navigation",
   });
-  await expect(navigation.getByRole("link")).toHaveCount(3);
+  await expect(navigation.getByRole("link")).toHaveCount(5);
+  await expect(
+    navigation.getByRole("link", { name: "Connected demo", exact: true }),
+  ).toHaveAttribute("href", "/signal");
+  await expect(
+    navigation.getByRole("link", { name: "Metrics", exact: true }),
+  ).toHaveAttribute("href", "/metrics");
   expect(
     await navigation.evaluate(
       (element) => element.getBoundingClientRect().width,
@@ -68,8 +74,7 @@ test("opens Monday, Attention, and Reports with exactly three navigation pages",
   await expect(page.getByText(run.configuration_hash)).toBeVisible();
   await navigation.getByRole("link", { name: "Monday", exact: true }).click();
   await expect(page).toHaveURL(/\/monday$/);
-  await page.goto("/signal");
-  await expect(page).toHaveURL(/\/attention$/);
+  await page.goto("/attention");
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(
     navigation.getByRole("link", { name: "Reports", exact: true }),

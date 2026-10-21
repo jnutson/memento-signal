@@ -26,6 +26,7 @@ from .investigation import read_investigation
 from .investigation_contract import Investigation
 from .serving import SIGNAL_ID, SignalStore
 from .signal_contract import PRIORITY_FIELDS
+from .metric_serving import metric_router
 
 
 OPTIONAL_PRIORITY_FIELDS = {name for name, _ in PRIORITY_FIELDS}
@@ -50,6 +51,7 @@ def _signal_problem(status_code: int, code: str, message: str) -> ApiProblem:
 def create_app(data_root: Path) -> FastAPI:
     root = data_root.resolve()
     app = FastAPI(title="Memento Signal API", version=SIGNAL_API_CONTRACT_VERSION)
+    app.include_router(metric_router(root))
 
     def signal_store() -> SignalStore:
         return SignalStore(root / "signals", root / "canonical")

@@ -44,8 +44,18 @@ npm --prefix web run dev
 ```
 
 Open `http://127.0.0.1:3000/monday`. The application exposes Monday, Attention,
-and Reports. `/signal` remains a redirect for old bookmarks; it is not a separate
+Reports, and Metrics. `/signal` remains a redirect for old bookmarks; it is not a separate
 product surface.
+
+The read-only [Metrics surface](docs/product/descriptive-metric-contract.md) at
+`http://127.0.0.1:3000/metrics` exposes realized velocity, region and store-tier
+breakdowns, reported zero stock, promised distribution, completed-period trends,
+and weekday patterns. It has its own immutable publication and does not replace
+the current Signal release or select actions.
+
+The alternative [Focus UI draft](docs/product/focus-ui-draft.md) is available at
+`http://127.0.0.1:3000/draft`, with a guided briefing, layered evidence, and local
+follow-through choices.
 
 Only explicit regular-file manifests are accepted. Source files are never modified
 or copied. Generated data remains below the ignored `data/` directory, and logs contain

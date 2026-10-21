@@ -34,7 +34,7 @@ test("drives a published signal release through the Memento Signal workflow", as
   const queueResponsePromise = page.waitForResponse((response) =>
     response.url().endsWith("/api/signals"),
   );
-  await page.goto("/signal");
+  await page.goto("/attention");
   const queueResponse = await queueResponsePromise;
   expect(queueResponse.ok()).toBe(true);
 

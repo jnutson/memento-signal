@@ -10,6 +10,7 @@ export default defineConfig({
     exclude: [
       "tests/e2e/**",
       "tests/fullstack/**",
+      "tests/connected/**",
       "node_modules/**",
       ".next/**",
     ],
