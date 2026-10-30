@@ -13,6 +13,10 @@ test("original UI, weekly report, all outcomes, details and clean restart", asyn
   await expect(
     page.getByRole("button", { name: "Explore", exact: true }),
   ).toBeVisible();
+  await expect(page).toHaveURL(/release=met_/);
+  await expect(
+    page.getByText(/items?\. Estimated exposure by type/),
+  ).toBeVisible();
   await page.screenshot({
     path: info.outputPath("original-overview.png"),
     fullPage: true,

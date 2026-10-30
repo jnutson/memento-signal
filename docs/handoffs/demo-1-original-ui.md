@@ -41,3 +41,18 @@ extracts, and Vercel access controls are unchanged. The deployment archive inclu
 only the required demo pages, application modules, and the frozen synthetic result
 bundle. Unrelated prototype routes, secrets, local authentication state and raw
 Parquet are excluded. Publication remains manual.
+
+## Published restoration
+
+- Production status: READY.
+- Stable URL: https://demo-1-omega-ten.vercel.app.
+- Deployment: `dpl_K27DVSdRHoNaQmkY8F1HoyA3QnUJ`.
+- Exact origin: https://demo-1-igblxkbi3-memento-loop.vercel.app.
+- Source application commit: `0ba536a`, branch `codex/demo-1-original-ui`.
+- Uploaded source fingerprint: `7babece3e6ce24477077f731e9dedfa74e643f4a061783e1ec19060fc83a4e5b`.
+- Frozen metric release: `met_343358122db25f35be6a9d5ba8392c5a3740f9022f80cc8e96b70831965f1ea0`.
+
+Authenticated live metadata returned HTTP 200 and the exact release above. The live
+browser check passed across the original interface, weekly report, all three outcome
+lenses, member-detail tables, restart and independent sessions. A post-deploy error
+scan returned zero error records. Existing Vercel sign-in protection remains intact.
