@@ -3,8 +3,11 @@ const apiOrigin = process.env.MEMENTO_API_ORIGIN ?? "http://127.0.0.1:8000";
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  devIndicators: false,
+  outputFileTracingIncludes: { "/**": ["./.demo/original.json"] },
   allowedDevOrigins: ["127.0.0.1"],
   async rewrites() {
+    if (process.env.MEMENTO_DEMO_BUNDLE === "1") return [];
     return [
       {
         source: "/api/metrics/:path*",
