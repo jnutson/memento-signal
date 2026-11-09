@@ -17,7 +17,8 @@
     "test:e2e": "playwright test",
     "test:e2e:fullstack": "playwright test --config playwright.fullstack.config.ts",
     "test:connected": "playwright test --config playwright.connected.config.ts",
-    "test:hosted": "playwright test --config playwright.hosted.config.ts"
+    "test:hosted": "playwright test --config playwright.hosted.config.ts",
+    "test:core": "playwright test --config playwright.core.config.ts"
   },
   "dependencies": {
     "next": "16.4.3",

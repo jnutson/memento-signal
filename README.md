@@ -1,5 +1,20 @@
 # Memento Analytics Demo
 
+## Core product workspace
+
+The customer UI branch `codex/core-product-ui` adds `/weekly` and `/detail` over
+the existing immutable Signal metric service. Normal `/` opens Weekly. Searchable
+product Sales, Inventory investigation and total Demand share the same pinned
+release, original dates and regional scope. No demo-world calendar or assumed
+promotion components are imported. The original `/signal` exploration and explicitly
+enabled frozen hosted demo remain available.
+
+See [the UI contract and local setup](docs/product/core-product-ui.md) for supported
+data, calculation mappings and customer-data prerequisites. `npm --prefix web run
+test:core` runs the real browser → API → DuckDB flow with eight synthetic products.
+This branch does not change customer data, deploy the app or establish production
+identity/tenant isolation.
+
 This repository is the smallest credible local demo of Memento Loop's deterministic
 retail analytics path:
 

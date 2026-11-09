@@ -38,9 +38,14 @@ test-e2e:
 test-e2e-fullstack:
 	$(NPM) --prefix web run test:e2e:fullstack
 
+test-e2e-core:
+	$(NPM) --prefix web run test:core
+
 verify: verify-ci
 
-verify-ci: test-python typecheck lint format-check audit-dependencies test-web build test-e2e test-e2e-fullstack
+verify-ci: test-python typecheck lint format-check audit-dependencies test-web build test-e2e test-e2e-fullstack test-e2e-core
+
+.PHONY: test-e2e-core
 
 delivery-ready:
 	$(PYTHON) tools/delivery.py ready --base "$(or $(BASE),origin/main)" --verification "$(or $(VERIFICATION),no-db)"

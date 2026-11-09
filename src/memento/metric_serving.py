@@ -14,6 +14,7 @@ from .metric_evaluation_serving import read_evaluation
 from .demo_review import ReviewContext, review_context
 from .metric_display import display_series, exposure_summary
 from .metric_attention import attention_values
+from .workspace import summary as workspace_summary, product_view, store_page
 
 
 class MetricStore:
@@ -130,6 +131,39 @@ class MetricStore:
 def metric_router(data_root: Path) -> APIRouter:
     router = APIRouter(prefix="/v1/metrics", tags=["Descriptive metrics"])
     store = MetricStore(data_root)
+
+    @router.get("/workspace-summary")
+    def workspace(release_id: str | None = Query(None, pattern=r"^met_[a-f0-9]{64}$")):
+        try:
+            root, manifest = store.current(release_id)
+            return workspace_summary(root, manifest)
+        except (OSError, ValueError, KeyError, TypeError, duckdb.Error):
+            raise HTTPException(503, "Workspace publication unavailable or failed validation.") from None
+
+    @router.get("/product-view")
+    def product(product_id: str = Query(..., min_length=1, max_length=100),
+                release_id: str = Query(..., pattern=r"^met_[a-f0-9]{64}$"),
+                region: str | None = Query(None, min_length=1, max_length=200),
+                finding_id: str | None = Query(None, pattern=r"^find_[a-f0-9]{64}$")):
+        try:
+            root, manifest = store.current(release_id)
+            return product_view(root, manifest, product_id, region=region, finding_id=finding_id)
+        except LookupError:
+            raise HTTPException(404, "Product, region or finding unavailable in this publication.") from None
+        except (OSError, ValueError, KeyError, TypeError, duckdb.Error):
+            raise HTTPException(503, "Product publication unavailable or failed validation.") from None
+
+    @router.get("/workspace-stores")
+    def workspace_stores(product_id: str = Query(..., min_length=1, max_length=100),
+                         release_id: str = Query(..., pattern=r"^met_[a-f0-9]{64}$"),
+                         region: str | None = Query(None, min_length=1, max_length=200),
+                         search: str = Query("", max_length=120),
+                         limit: int = Query(25, ge=1, le=100), offset: int = Query(0, ge=0, le=1_000_000)):
+        try:
+            root, manifest = store.current(release_id)
+            return store_page(root, manifest, product_id, region=region, search=search,limit=limit,offset=offset)
+        except (OSError, ValueError, KeyError, TypeError, duckdb.Error):
+            raise HTTPException(503, "Store visibility unavailable or failed validation.") from None
 
     @router.get("/evaluations/{evaluation_id}")
     def evaluation(evaluation_id: str):

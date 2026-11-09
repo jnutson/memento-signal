@@ -17,7 +17,8 @@ const pages = [
 export default function Shell({ children }: Readonly<{ children: ReactNode }>) {
   const pathname = usePathname();
   // The connected demo uses Metrics, never the separately published legacy queue.
-  if (["/", "/signal", "/report"].includes(pathname)) return children;
+  if (["/", "/signal", "/report", "/weekly", "/detail"].includes(pathname))
+    return children;
   return (
     <ReleaseProvider>
       <ProductShell>{children}</ProductShell>

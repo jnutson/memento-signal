@@ -12,6 +12,7 @@ export default defineConfig({
       "tests/fullstack/**",
       "tests/connected/**",
       "tests/hosted/**",
+      "tests/core-ui/**",
       "node_modules/**",
       ".next/**",
     ],
