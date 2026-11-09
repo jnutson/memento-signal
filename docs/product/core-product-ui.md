@@ -1,5 +1,10 @@
 # Core product UI port
 
+Security integration is on `codex/customer-ui-security`, based on the completed UI
+at `e6038fd`. See [customer serving controls](../architecture/customer-ui-security.md)
+and [release gates](../runbooks/customer-ui-release.md). Automated core browser tests
+use isolated ports 18122/13122; the manual preview defaults remain 8122/3122.
+
 Implemented November 8, 2026, on `codex/core-product-ui`, based on Signal's
 `codex/demo-1-original-ui` at `f9cd045`. The original Signal `main` working tree,
 its uncommitted changes and the original hosted demo are preserved. This is the

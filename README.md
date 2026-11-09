@@ -1,5 +1,12 @@
 # Memento Analytics Demo
 
+The `codex/customer-ui-security` integration adds protected customer serving and
+the `/craftmix` deployment path to the existing UI. See the
+[security architecture](docs/architecture/customer-ui-security.md) and
+[release runbook](docs/runbooks/customer-ui-release.md). Local synthetic verification
+is implemented; production hosting, identity configuration, disclosure approval
+and customer-data activation remain separate release gates.
+
 ## Core product workspace
 
 The customer UI branch `codex/core-product-ui` adds `/weekly` and `/detail` over
@@ -12,8 +19,8 @@ enabled frozen hosted demo remain available.
 See [the UI contract and local setup](docs/product/core-product-ui.md) for supported
 data, calculation mappings and customer-data prerequisites. `npm --prefix web run
 test:core` runs the real browser → API → DuckDB flow with eight synthetic products.
-This branch does not change customer data, deploy the app or establish production
-identity/tenant isolation.
+The original UI slice did not establish production identity/tenant isolation;
+the integration above supplies the application controls without activating production.
 
 This repository is the smallest credible local demo of Memento Loop's deterministic
 retail analytics path:

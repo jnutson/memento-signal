@@ -1,9 +1,10 @@
 "use client";
+import { workspacePath, workspaceStorageKey } from "@/lib/workspace-path";
 export function clearDemoSession() {
   for (const key of Object.keys(sessionStorage))
     if (
-      key.startsWith("memento-original-ui-v1:") ||
-      key === "memento-demo-publication"
+      key.startsWith(workspaceStorageKey("memento-original-ui-v1:")) ||
+      key === workspaceStorageKey("memento-demo-publication")
     )
       sessionStorage.removeItem(key);
 }
@@ -38,7 +39,11 @@ export default function DemoStart() {
           Explore the attention queue, open the weekly report, and follow each
           finding into its evidence.
         </p>
-        <form action="/signal" method="get" onSubmit={clearDemoSession}>
+        <form
+          action={workspacePath("/signal")}
+          method="get"
+          onSubmit={clearDemoSession}
+        >
           <button
             type="submit"
             style={{

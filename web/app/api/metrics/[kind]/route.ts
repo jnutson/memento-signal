@@ -40,10 +40,16 @@ export async function GET(
   request: Request,
   ctx: { params: Promise<{ kind: string }> },
 ) {
-  const headers = { "Cache-Control": "no-store" };
+  const headers = {
+    "Cache-Control": "private, no-store",
+    "CDN-Cache-Control": "no-store",
+  };
   const fail = (status: number, detail: string) =>
     Response.json({ detail }, { status, headers });
-  if (process.env.MEMENTO_DEMO_BUNDLE !== "1")
+  if (
+    process.env.MEMENTO_SERVING_MODE === "cloudflare" ||
+    process.env.MEMENTO_DEMO_BUNDLE !== "1"
+  )
     return fail(404, "Hosted demo disabled");
   const parsed = querySchema.safeParse(
     Object.fromEntries(new URL(request.url).searchParams),

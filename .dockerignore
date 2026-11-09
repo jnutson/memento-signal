@@ -1,0 +1,10 @@
+**
+!pyproject.toml
+!requirements.lock
+!requirements-runtime.lock
+!README.md
+!src/
+!src/memento/
+!src/memento/*.py
+!deploy/
+!deploy/api-entrypoint.sh

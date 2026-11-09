@@ -1,3 +1,4 @@
+import { workspacePath } from "@/lib/workspace-path";
 import { z } from "zod";
 import { productSchema, summarySchema, storePageSchema } from "./schema";
 
@@ -7,7 +8,7 @@ async function read<T>(
   schema: z.ZodType<T>,
   signal?: AbortSignal,
 ) {
-  const response = await fetch(`/api/metrics/${kind}?${query}`, {
+  const response = await fetch(workspacePath(`/api/metrics/${kind}?${query}`), {
     signal,
     cache: "no-store",
   });

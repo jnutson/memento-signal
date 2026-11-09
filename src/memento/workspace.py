@@ -10,6 +10,7 @@ from math import fsum
 from pathlib import Path
 
 import duckdb
+from .query import serving_connection
 
 VERSION = "workspace-view-v1"
 
@@ -47,7 +48,7 @@ def summary(root: Path, manifest: dict) -> dict:
     """UI-W01: one common complete calendar week; never cherry-pick a fuller week."""
     end = _week_end(manifest["observation_date"])
     start = end - timedelta(days=6)
-    with duckdb.connect() as con:
+    with serving_connection(root) as con:
         products = con.execute("""SELECT DISTINCT product_id, product_name, source_product_id, company_item_id
             FROM read_parquet(?) ORDER BY product_name,product_id""",
             [str(root / "current_store.parquet")]).to_arrow_table().to_pylist()
@@ -91,8 +92,7 @@ def product_view(root: Path, manifest: dict, product_id: str, *, region: str | N
     """UI-W02/03/04: scoped facts and 28-day alternatives, no new demand estimator."""
     end = _week_end(manifest["observation_date"])
     cap = _capabilities(manifest)
-    with duckdb.connect() as con:
-        con.execute("SET threads=1")
+    with serving_connection(root) as con:
         exists = con.execute("SELECT count(*) FROM read_parquet(?) WHERE product_id=?",
                              [str(root / "current_store.parquet"), product_id]).fetchall()[0][0]
         if not exists:
@@ -192,7 +192,7 @@ def product_view(root: Path, manifest: dict, product_id: str, *, region: str | N
 def store_page(root: Path, manifest: dict, product_id: str, *, region: str | None = None,
                search: str = "", limit: int = 25, offset: int = 0) -> dict:
     """UI-W04: allowlisted store visibility, bounded pages, never raw cost records."""
-    with duckdb.connect() as con:
+    with serving_connection(root) as con:
         where = "product_id=? AND eligible AND (? IS NULL OR region=?) AND contains(lower(location_name||' '||source_location_id),lower(?))"
         params = [str(root / "current_store.parquet"), product_id, region, region, search]
         total = con.execute("SELECT count(*) FROM read_parquet(?) WHERE " + where, params).fetchall()[0][0]

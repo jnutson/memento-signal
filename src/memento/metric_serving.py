@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Literal
 
 import duckdb
+from .query import serving_connection
 from fastapi import APIRouter, HTTPException, Query
 
 from .metric_publication import RELEASE_ID, scalar, validate_release
@@ -14,6 +15,8 @@ from .metric_evaluation_serving import read_evaluation
 from .demo_review import ReviewContext, review_context
 from .metric_display import display_series, exposure_summary
 from .metric_attention import attention_values
+from .metric_disclosure import columns
+from .http_security import current_policy
 from .workspace import summary as workspace_summary, product_view, store_page
 
 
@@ -30,19 +33,41 @@ class MetricStore:
         if not isinstance(release_id, str) or not RELEASE_ID.fullmatch(release_id):
             raise ValueError("invalid metric release ID")
         manifest = member(self.root, release_id + "/manifest.json")
+        policy = current_policy.get()
+        if policy:
+            policy.approved_manifest(self.root.parent, manifest)
+        if policy is None and json.loads(manifest.read_bytes()).get("source_classification") != "synthetic":
+            raise ValueError("local serving requires declared synthetic inputs")
         document = validate_release(manifest.parent)
+        if policy:
+            if document.get("source_classification") != policy.classification:
+                raise ValueError("publication classification mismatch")
+            dataset = document.get("canonical_dataset_id")
+            import re
+            if not isinstance(dataset, str) or not re.fullmatch(r"mds_[A-Za-z0-9_]+", dataset):
+                raise ValueError("invalid canonical identity")
+            canonical = member(self.root.parent / "canonical", dataset + "/manifest.json")
+            from .manifest import sha256_file
+            if sha256_file(canonical) != document.get("canonical_manifest_sha256"):
+                raise ValueError("canonical publication binding mismatch")
+            policy.approved_manifest(self.root.parent, canonical)
+        elif document.get("source_classification") != "synthetic":
+            raise ValueError("local serving requires declared synthetic inputs")
         if document["metric_release_id"] != release_id:
             raise ValueError("metric pointer identity mismatch")
         return manifest.parent, document
 
     def metadata(self, release_id: str | None = None) -> dict:
         root, manifest = self.current(release_id)
-        with duckdb.connect() as con:
+        with serving_connection(root) as con:
             items = con.execute("SELECT DISTINCT product_id,product_name,source_product_id,company_item_id FROM read_parquet(?) ORDER BY source_product_id", [str(root / "current_store.parquet")]).to_arrow_table().to_pylist()
             periods = con.execute("SELECT DISTINCT period_kind,period_start,period_end FROM read_parquet(?) ORDER BY period_start DESC,period_kind", [str(root / "metric_period.parquet")]).to_arrow_table().to_pylist()
             checks = con.execute("SELECT check_code,count(*) count FROM read_parquet(?) GROUP BY ALL ORDER BY check_code", [str(root / "checks.parquet")]).to_arrow_table().to_pylist()
         capabilities = sorted(f["path"].removesuffix(".parquet") for f in manifest["files"] if f["path"].endswith(".parquet"))
-        return {**manifest, "items": items, "periods": periods, "check_counts": checks, "capabilities": capabilities}
+        keys = {"metric_release_id", "contract_version", "observation_date", "population", "states", "formulas", "limitations", "configuration", "as_of", "supply_model", "expected_supply_model", "finding_model"}
+        public = {key: value for key, value in manifest.items() if key in keys}
+        public["files"] = [{"path": f["path"]} for f in manifest["files"]]
+        return {**public, "items": items, "periods": periods, "check_counts": checks, "capabilities": capabilities}
 
     def rows(self, kind: str, *, release_id: str | None = None, grain: str = "item",
              product_id: str | None = None, scope_id: str | None = None, period_kind: str = "week",
@@ -120,9 +145,10 @@ class MetricStore:
                     "finding-evidence": "product_id,location_id,evidence_id"}[kind]
         if not (root/(files[kind]+".parquet")).is_file():
             raise ValueError("requested table is not in this historical metric contract")
-        with duckdb.connect() as con:
+        projection = columns(kind) if current_policy.get() else "*"
+        with serving_connection(root) as con:
             total = scalar(con, f"SELECT count(*) FROM read_parquet(?) WHERE {where}", params)
-            rows = con.execute(f"SELECT * FROM read_parquet(?) WHERE {where} ORDER BY {ordering} LIMIT ? OFFSET ?",
+            rows = con.execute(f"SELECT {projection} FROM read_parquet(?) WHERE {where} ORDER BY {ordering} LIMIT ? OFFSET ?",
                                [*params, limit, offset]).to_arrow_table().to_pylist()
         return {"metric_release_id": manifest["metric_release_id"], "kind": kind, "total": total,
                 "limit": limit, "offset": offset, "rows": rows}
@@ -186,7 +212,7 @@ def metric_router(data_root: Path) -> APIRouter:
             root, manifest = store.current(release_id)
             if not (root / "finding.parquet").is_file():
                 raise HTTPException(409, "This historical release does not include findings.")
-            with duckdb.connect() as con:
+            with serving_connection(root) as con:
                 rows = con.execute("SELECT finding_id,finding_code FROM read_parquet(?) WHERE finding_id=?",
                                    [str(root / "finding.parquet"), finding_id]).to_arrow_table().to_pylist()
             if not rows:

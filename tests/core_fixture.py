@@ -9,7 +9,9 @@ from tests.test_metric_backend_v2 import supply_fixture
 from tests.test_planned_supply import planned_source
 
 
-def core_fixture(root, products=8, complete_sales=False):
+def core_fixture(root, products=8, complete_sales=False, tenant_id=None):
+    from memento.ownership import bind_owner
+    bind_owner(root, tenant_id)
     canonical, source, config = supply_fixture(root)
     for file in sorted(canonical.rglob("*.parquet")):
         table = pq.read_table(file)
@@ -39,4 +41,10 @@ def core_fixture(root, products=8, complete_sales=False):
     coverage = [{"store_nbr":s,"wm_item_nbr":100+i,"known_at":datetime(2026,11,28,12,tzinfo=UTC),
                  "planned_orders_available":True,"reason":"available"} for i in range(products) for s in range(1,5)]
     source = planned_source(root,source,coverage=coverage)
+    if tenant_id is not None:
+        import json
+        manifest_path = canonical / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["tenant_id"] = tenant_id
+        manifest_path.write_text(json.dumps(manifest, sort_keys=True))
     return publish_metrics(canonical,source,data_root=root,config=config,activate=True)

@@ -5,7 +5,8 @@ NPM ?= npm
 
 setup:
 	python3 -m venv .venv
-	$(PYTHON) -m pip install -e '.[dev]'
+	$(PYTHON) -m pip install --require-hashes -r requirements-dev.lock
+	$(PYTHON) -m pip install --no-deps -e .
 	$(NPM) --prefix web ci
 
 test-python:
@@ -30,7 +31,7 @@ test-web:
 	$(NPM) --prefix web test
 
 build:
-	$(NPM) --prefix web run build
+	MEMENTO_SERVING_MODE=disabled MEMENTO_DEMO_BUNDLE=0 $(NPM) --prefix web run build
 
 test-e2e:
 	$(NPM) --prefix web run test:e2e
@@ -43,12 +44,19 @@ test-e2e-core:
 
 verify: verify-ci
 
-verify-ci: test-python typecheck lint format-check audit-dependencies test-web build test-e2e test-e2e-fullstack test-e2e-core
+verify-ci: security-source test-python typecheck lint format-check audit-dependencies test-web build test-e2e test-e2e-fullstack test-e2e-core test-e2e-security
 
-.PHONY: test-e2e-core
+.PHONY: test-e2e-core test-e2e-security
 
 delivery-ready:
 	$(PYTHON) tools/delivery.py ready --base "$(or $(BASE),origin/main)" --verification "$(or $(VERIFICATION),no-db)"
 
 delivery-pr-check:
 	$(PYTHON) tools/delivery.py pr-check
+
+.PHONY: security-source test-e2e-security
+security-source:
+	$(PYTHON) -m tools.check_security
+
+test-e2e-security:
+	$(PYTHON) -m tools.verify_security

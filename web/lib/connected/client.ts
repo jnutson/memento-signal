@@ -1,3 +1,4 @@
+import { workspacePath } from "@/lib/workspace-path";
 import { z } from "zod";
 import {
   findingSchema,
@@ -8,7 +9,7 @@ import {
 } from "./schema";
 
 async function request(path: string, signal?: AbortSignal): Promise<unknown> {
-  const response = await fetch(`/api/metrics/${path}`, {
+  const response = await fetch(workspacePath(`/api/metrics/${path}`), {
     signal,
     cache: "no-store",
   });

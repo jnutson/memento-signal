@@ -1,5 +1,6 @@
 "use client";
 import { Suspense, useEffect, useState } from "react";
+import { routePath, workspacePath } from "@/lib/workspace-path";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -21,7 +22,7 @@ export default function Workspace() {
 function Loader() {
   const params = useSearchParams(),
     router = useRouter(),
-    path = usePathname();
+    path = routePath(usePathname());
   const requested = params.get("release");
   const [state, setState] = useState<{
     requested: string | null;
@@ -106,7 +107,7 @@ function NavIcon({ detail = false }: { detail?: boolean }) {
 }
 function Connected({ summary: s }: { summary: Summary }) {
   const params = useSearchParams(),
-    pathname = usePathname();
+    pathname = routePath(usePathname());
   const product = params.get("product") ?? s.products[0]?.product_id;
   const item = s.products.find((p) => p.product_id === product);
   const tab: Tab =
@@ -130,7 +131,7 @@ function Connected({ summary: s }: { summary: Summary }) {
           title="Craftmix"
         >
           <Image
-            src="/craftmix-logo.png"
+            src={workspacePath("/craftmix-logo.png")}
             alt="Craftmix"
             width={56}
             height={56}

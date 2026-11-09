@@ -5,7 +5,9 @@ test("Weekly, catalog, scoped Sales, shared Demand/Inventory, store visibility a
   request,
 }, info) => {
   const { release } = await (
-    await request.get("http://127.0.0.1:8122/test-release")
+    await request.get(
+      `${process.env.CORE_API_ORIGIN ?? "http://127.0.0.1:8122"}/test-release`,
+    )
   ).json();
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -182,7 +184,9 @@ test("invalid publication and corrupt scoped response never substitute illustrat
     page.getByRole("heading", { name: "Report unavailable", exact: true }),
   ).toBeVisible();
   const { release } = await (
-    await request.get("http://127.0.0.1:8122/test-release")
+    await request.get(
+      `${process.env.CORE_API_ORIGIN ?? "http://127.0.0.1:8122"}/test-release`,
+    )
   ).json();
   const original = await (
     await request.get(

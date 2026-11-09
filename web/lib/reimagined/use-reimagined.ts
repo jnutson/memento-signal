@@ -1,4 +1,5 @@
 "use client";
+import { workspaceStorageKey } from "@/lib/workspace-path";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -340,7 +341,7 @@ export default function useReimagined(defaultRelease?: string): ViewModel {
     subscribe,
     () => {
       try {
-        return sessionStorage.getItem(sessionKey);
+        return sessionStorage.getItem(workspaceStorageKey(sessionKey));
       } catch {
         return null;
       }
@@ -357,7 +358,7 @@ export default function useReimagined(defaultRelease?: string): ViewModel {
   const saveNote = (id: string, value: z.infer<typeof noteSchema>) => {
     try {
       sessionStorage.setItem(
-        sessionKey,
+        workspaceStorageKey(sessionKey),
         JSON.stringify({ ...notes, [id]: noteSchema.parse(value) }),
       );
       window.dispatchEvent(new Event("memento-original-note"));

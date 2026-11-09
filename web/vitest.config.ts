@@ -13,6 +13,7 @@ export default defineConfig({
       "tests/connected/**",
       "tests/hosted/**",
       "tests/core-ui/**",
+      "tests/security/**",
       "node_modules/**",
       ".next/**",
     ],

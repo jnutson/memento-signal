@@ -14,6 +14,7 @@ import duckdb
 import pyarrow as pa
 
 from .canonical import SCHEMAS
+from .ownership import require_owner
 from .manifest import canonical_json, sha256_file
 from .metric_contract import FORMULAS, VERSION, PLANNED_SUPPLY_VERSION, RETAILER_BASELINE_VERSION, PREVIOUS_VERSION, LEGACY_VERSION, MetricConfig
 from .metric_queries import CURRENT, DAILY, PERIODS, WEEKDAY, TRENDS, QUALITY_EPISODES
@@ -59,6 +60,7 @@ def publish_metrics(canonical: Path, source: DistributionSource, *, data_root: P
         raise ValueError("non-symlink canonical path required")
     manifest_path = member(canonical, "manifest.json")
     manifest = json.loads(manifest_path.read_text())
+    require_owner(data_root.resolve(), manifest)
     as_of = datetime.fromisoformat(manifest["as_of"].replace("Z", "+00:00"))
     if as_of.tzinfo is None:
         raise ValueError("timezone-aware release cutoff required")
@@ -151,6 +153,8 @@ def publish_metrics(canonical: Path, source: DistributionSource, *, data_root: P
             states = dict(con.execute("SELECT current_state,count(*) FROM current_store GROUP BY ALL ORDER BY current_state").fetchall())
             document = {
                 "contract_version": VERSION, "as_of": manifest["as_of"],
+                "source_classification": manifest.get("source_classification", "unclassified"),
+                **({"tenant_id": manifest["tenant_id"]} if "tenant_id" in manifest else {}),
                 "observation_date": observation.isoformat(), "history_start": start.isoformat(),
                 "canonical_dataset_id": manifest["dataset_id"],
                 "canonical_manifest_sha256": sha256_file(manifest_path),
