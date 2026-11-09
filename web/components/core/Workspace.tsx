@@ -1,6 +1,7 @@
 "use client";
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { loadSummary } from "@/lib/core/client";
 import type { Basis, Summary, Tab } from "@/lib/core/schema";
@@ -125,8 +126,16 @@ function Connected({ summary: s }: { summary: Summary }) {
         <Link
           href={`/weekly?release=${s.metric_release_id}`}
           className={css.brand}
+          aria-label="Craftmix · Weekly report"
+          title="Craftmix"
         >
-          memento<span>loop</span>
+          <Image
+            src="/craftmix-logo.png"
+            alt="Craftmix"
+            width={56}
+            height={56}
+            preload
+          />
         </Link>
         <nav className={css.nav} aria-label="Main navigation">
           <Link
