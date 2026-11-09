@@ -1,5 +1,10 @@
 # Memento Signal Three-Metric MVP — Builder Plan
 
+> Demo scope is superseded by the [approved Monday demo contract](../product/demo-contract.md).
+> This document records an earlier milestone; OOS-only UI restrictions, the 3D scene,
+> and broader capabilities are not additional demo requirements. Existing calculation
+> and trust rules remain applicable unless explicitly versioned elsewhere.
+
 Status: proposed builder handoff
 
 ## Outcome

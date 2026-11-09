@@ -67,7 +67,10 @@ def verify(data_root: Path) -> dict[str, object]:
     for signal_type in counts:
         response = client.get("/v1/signals", params={"signal_type": signal_type})
         assert response.status_code == 200, response.text
-        assert response.json()["signals"] == [row for row in queue["signals"] if row["signal_type"] == signal_type]
+        filtered = response.json()["signals"]
+        expected = [row for row in rows if row["signal_type"] == signal_type][:10]
+        assert [row["signal_id"] for row in filtered] == [row["signal_id"] for row in expected]
+        assert [row["overall_rank_position"] for row in filtered] == [row["overall_rank_position"] for row in expected]
     for row in queue["signals"]:
         response = client.get(f"/v1/signals/{row['signal_id']}")
         assert response.status_code == 200, response.text

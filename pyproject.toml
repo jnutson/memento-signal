@@ -8,21 +8,25 @@ version = "0.1.0"
 description = "Local manifest-driven retail ingestion MVP"
 requires-python = ">=3.11"
 dependencies = [
-  "duckdb>=1.4.3,<2",
+  "duckdb==1.5.6",
+  "mcp==2.3.0",
+  "jsonschema>=4.26,<5",
   "fastapi>=0.116,<1",
   "pyarrow>=21,<24",
   "pydantic>=2.11,<3",
   "uvicorn>=0.35,<1",
+  "PyJWT[crypto]==2.15.1",
 ]
 
 [project.optional-dependencies]
-dev = ["httpx>=0.28,<1", "pyright>=1.1,<2", "pytest>=8.4,<9"]
+dev = ["httpx>=0.28,<1", "pyright>=1.1,<2", "pytest>=9.0.3,<10"]
 
 [project.scripts]
 memento-ingest = "memento.cli:main"
 memento-predict = "memento.prediction_cli:main"
 memento-evaluate = "memento.evaluation_cli:main"
 memento-serve = "memento.api_cli:main"
+memento-mcp = "memento.mcp_cli:main"
 memento-signal = "memento.signal_cli:main"
 
 [tool.setuptools.packages.find]
@@ -46,6 +50,13 @@ include = [
   "src/memento/signals.py",
   "src/memento/supply.py",
   "src/memento/api.py",
+  "src/memento/mcp_server.py",
+  "src/memento/mcp_security.py",
+  "src/memento/mcp_catalog.py",
+  "src/memento/mcp_cli.py",
+  "src/memento/security.py",
+  "src/memento/query.py",
+  "src/memento/ownership.py",
   "src/memento/serving.py",
   "tools",
 ]

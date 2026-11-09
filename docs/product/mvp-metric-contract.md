@@ -3,6 +3,28 @@
 Status: accepted for MVP implementation
 Contract version: `memento-signal-metrics-v1.0.0`
 
+## Current demo interpretation
+
+The [approved demo contract](demo-contract.md) controls presentation and workflow.
+The three-signal rules below and the deterministic implementations remain unchanged
+by the cleanup. The OOS-only descriptions and fixed 90-item/2,000-store defaults in
+later sections describe the legacy prediction capability, not the current demo cohort.
+Read the publication manifest for the actual cohort, versions, and configuration.
+
+Legacy signal mode uses metric version `memento-signal-metrics-v1.0.0` and ranker
+`memento-signal-ranker-v1`. Optional supply-aware mode uses metric version
+`memento-signal-metrics-v1.1.0` and ranker
+`memento-signal-actionability-ranker-v1`, as specified in the
+[approved supply contract](../plans/small-slice-supply-contract.md). Its actionability
+and supply assumptions must not be represented as the legacy reaction allowance.
+The demo preserves whichever approved versions its pinned publication declares.
+
+Report counts are counts of persisted eligible store-item signals, over the complete
+publication. Leaders are the first matching rows by published overall rank. Demand
+overperformance selects only `demand_momentum` / `acceleration`. No report metric
+sums heterogeneous economic values. Presentation changes do not change any signal
+eligibility, score, or economic equation.
+
 ## Purpose
 
 The common rank is `0.50 * type_relative_impact + 0.30 * reaction + 0.20 *

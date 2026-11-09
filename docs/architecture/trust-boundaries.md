@@ -2,11 +2,15 @@
 
 Status: initial MVP outline. Update this document as concrete interfaces are chosen.
 
+See [Customer security boundary](customer-security.md) for implemented serving and
+ownership controls and remaining production gates. Local verification does not
+authorize processing existing customer files or activating production access.
+
 ## Users and systems
 
 - **Memento operator/developer:** runs local ingestion, validation, and analysis.
-- **CPG customer users (future):** provide data and consume insights; customer isolation
-  and authorization requirements are not yet designed.
+- **CPG customer users:** consume approved tenant-owned publications through the
+  protected serving boundary; production identity and access activation remain gated.
 - **Retailer and internal sources:** POS, inventory, in-stock, orders, shipments, DC
   inventory, promotions, price, assortment, item/store hierarchy, supply-chain, and
   forecast files or APIs. Every source is untrusted input.

@@ -7,7 +7,7 @@ export function calibrationNotice(status: string | null | undefined): string | n
   if (status === "engineering_only_parent_economics_miscalibrated") return "Engineering slice: parent sales and inventory retain a known calibration defect. Economic amounts are not calibrated business estimates.";
   return "Engineering slice: calibration is not verified for commercial or operational decisions.";
 }
-const decimal = z.string().regex(/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/);
+const decimal = z.string().regex(/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/).refine((value) => Number.isFinite(Number(value)), "Decimal must be finite");
 const money = decimal.nullable();
 const score = decimal.refine((value) => Number(value) >= 0 && Number(value) <= 1);
 const signalType = z.enum(["availability", "demand_momentum", "inventory_imbalance"]);
@@ -91,13 +91,24 @@ export const signalDetailSchema = z.strictObject({
   signal: signalObjectSchema.extend({ signal_as_of: z.iso.datetime({ offset: true }), company_id: z.string(), brand_id: z.string(), forecast_quality: score, data_completeness: score, stability_score: score, source_release_ids: z.array(z.string()), source_release_set_id: z.string(), canonical_dataset_id: z.string(), metric_contract_version: z.string(), signal_publication_version: z.string(), ranker_version: z.string(), configuration_hash: z.string() }).superRefine(validateSignalFields),
   evidence: z.array(evidence),
   supply_context: supplyContext.nullable().optional(),
+  projected_depletion_date: z.iso.date().nullable().optional(),
 }).superRefine((value, context) => {
   if (value.evidence.some((row) => row.signal_id !== value.signal.signal_id)) context.addIssue({ code: "custom", path: ["evidence"], message: "Evidence identity must match signal" });
+  const observation = new Date(`${value.signal.observation_date}T00:00:00Z`);
+  const expectedDates = Array.from({ length: 28 }, (_, i) => new Date(observation.getTime() + (i + 1) * 86400000).toISOString().slice(0, 10));
+  const completeHorizon = (rows: z.infer<typeof evidence>[]) => rows.length === 28 && new Set(rows.map((row) => row.evidence_date)).size === 28 && rows.every((row) => expectedDates.includes(row.evidence_date));
+  const issue = (message: string) => context.addIssue({ code: "custom", path: ["evidence"], message });
+  if (value.evidence.some((row) => [row.actual_units, row.retailer_forecast_units, row.adjusted_forecast_units, row.demand_units, row.scheduled_inbound_units, row.opening_units, row.ending_units, row.lost_units, row.target_units].some((v) => v !== null && Number(v) < 0))) issue("Evidence units must be nonnegative");
   if (value.signal.signal_type === "demand_momentum") {
     const historical = value.evidence.filter((row) => row.evidence_type === "historical_week" && row.path === null);
     const forward = value.evidence.filter((row) => row.evidence_type === "forward_demand" && row.path === "base");
+    if (new Set(historical.map((row) => row.evidence_date)).size !== 8 || historical.some((row) => row.evidence_date >= value.signal.observation_date || row.actual_units === null || row.retailer_forecast_units === null) || !completeHorizon(forward) || forward.some((row) => row.retailer_forecast_units === null || row.adjusted_forecast_units === null)) issue("Demand evidence dates and values must be complete");
     if (value.evidence.length !== 36 || historical.length !== 8 || forward.length !== 28) context.addIssue({ code: "custom", path: ["evidence"], message: "Demand evidence must contain eight historical weeks and 28 forward days" });
     return;
+  }
+  for (const path of ["low", "base", "high"]) {
+    const rows = value.evidence.filter((row) => row.path === path && row.evidence_type === "inventory_projection");
+    if (!completeHorizon(rows) || rows.some((row) => row.opening_units === null || row.ending_units === null || row.demand_units === null || row.lost_units === null || row.scheduled_inbound_units === null)) issue("Inventory evidence dates and values must be complete");
   }
   const counts = { low: 0, base: 0, high: 0 };
   for (const row of value.evidence) if (row.evidence_type === "inventory_projection" && row.path !== null) counts[row.path] += 1;
@@ -110,3 +121,21 @@ export type SignalQueue = z.infer<typeof signalQueueSchema>;
 export type SignalRow = z.infer<typeof signalSchema>;
 export type SignalDetail = z.infer<typeof signalDetailSchema>;
 export type SignalType = z.infer<typeof signalType>;
+
+export const mondayReportSchema = z.strictObject({
+  api_contract_version: z.literal(SIGNAL_API_CONTRACT_VERSION),
+  run: signalQueueSchema.shape.run,
+  scope: z.strictObject({ classification: z.enum(["synthetic", "internal", "confidential_customer"]), observed_from: z.iso.date(), observed_through: z.iso.date(), horizon_from: z.iso.date(), horizon_through: z.iso.date(), item_count: z.number().int().positive(), store_count: z.number().int().positive() }),
+  categories: z.array(z.strictObject({ signal_type: signalType, signal_direction: z.literal("acceleration").nullable(), candidate_count: z.number().int().nonnegative(), leading_signal: signalSchema.nullable() })).length(3),
+}).superRefine((value, context) => {
+  const expected = ["availability", "inventory_imbalance", "demand_momentum"];
+  value.categories.forEach((card, index) => {
+    if (card.signal_type !== expected[index] || card.signal_direction !== (card.signal_type === "demand_momentum" ? "acceleration" : null) ||
+        (card.candidate_count === 0) !== (card.leading_signal === null) ||
+        card.leading_signal && (card.leading_signal.signal_type !== card.signal_type || card.signal_direction && card.leading_signal.signal_direction !== card.signal_direction)) context.addIssue({ code: "custom", path: ["categories", index], message: "Report selection and leader must agree" });
+    const total = value.run.candidate_counts_by_type[card.signal_type];
+    if (card.candidate_count > total || card.signal_type !== "demand_momentum" && card.candidate_count !== total) context.addIssue({ code: "custom", path: ["categories", index], message: "Report count must match its selection" });
+  });
+  if (value.scope.observed_from > value.scope.observed_through || value.scope.horizon_from > value.scope.horizon_through) context.addIssue({ code: "custom", path: ["scope"], message: "Report dates must be ordered" });
+});
+export type MondayReport = z.infer<typeof mondayReportSchema>;

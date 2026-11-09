@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "tenant_id": "customer-example",
+  "issuer": "https://replace-team.cloudflareaccess.com",
+  "audience": "REPLACE_WITH_ACCESS_APPLICATION_AUD",
+  "members": {},
+  "classification": "confidential_customer",
+  "manifests": {
+    "canonical/mds_REPLACE/manifest.json": "REPLACE_WITH_REVIEWED_SHA256",
+    "signals/mss_REPLACE/manifest.json": "REPLACE_WITH_REVIEWED_SHA256"
+  }
+}

@@ -51,3 +51,10 @@ describe("Memento Signal runtime contract", () => {
     expect(parse({ ...context, planned_replenishment: [{ quantity: 10, basis: "assumed", planned_order_date: "2027-01-31", early: "2027-01-30", typical: "2027-02-02", conservative: "2027-02-03", stages: [] }] })).toBe(false);
   });
 });
+
+it("rejects duplicate evidence dates, missing chart values, and unbounded decimals", () => {
+  const parse = (rows: unknown) => signalDetailSchema.safeParse({ api_contract_version: "memento-signal-api-v1", signal, evidence: rows }).success;
+  expect(parse(evidence.map((row, i) => i === 1 ? { ...row, evidence_date: evidence[0].evidence_date } : row))).toBe(false);
+  expect(parse(evidence.map((row, i) => i === 0 ? { ...row, ending_units: null } : row))).toBe(false);
+  expect(parse(evidence.map((row, i) => i === 0 ? { ...row, ending_units: "9".repeat(400) } : row))).toBe(false);
+});

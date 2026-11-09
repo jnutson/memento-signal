@@ -22,11 +22,11 @@ or by marker:
 ```
 
 The Playwright suite under `web/tests/e2e` has a different purpose: it verifies the
-interactive Attention workflow in a real browser against controlled API fixtures.
+Monday report and attention workflow in a real browser against controlled API fixtures.
 
-The full-stack browser test connects both layers. It publishes the same temporary
+The full-stack browser test connects both layers. It publishes a four-item temporary
 synthetic release, starts the real FastAPI adapter and Next.js application, then drives
-the queue and planning workflow with Playwright:
+the report, all three category queues, and published evidence with Playwright:
 
 ```bash
 cd web

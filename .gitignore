@@ -27,6 +27,7 @@ __pycache__/
 # Frontend
 web/node_modules/
 web/.next/
+web/.next-security/
 web/coverage/
 web/playwright-report/
 web/test-results/
@@ -38,3 +39,8 @@ web/CLAUDE.md
 .DS_Store
 .idea/
 .vscode/
+
+# Frozen synthetic hosting bundle and local Vercel linkage
+web/.demo/
+.vercel/
+web/.vercel/

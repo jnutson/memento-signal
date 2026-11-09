@@ -1,0 +1,22 @@
+# Customer builds contain source only. Synthetic demo packaging is a separate,
+# explicit generator/export workflow; never deploy local data with the CLI.
+.demo/
+.env*
+.vercel/
+.next/
+.next-security/
+node_modules/
+coverage/
+test-results/
+playwright-report/
+**/data/**
+**/*.parquet
+**/*.duckdb*
+**/*.db
+**/*.sqlite*
+**/*.csv
+**/*.tsv
+**/*.xlsx
+**/*.xls
+**/*.pem
+**/*.key

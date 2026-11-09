@@ -7,10 +7,10 @@ export default function Shell({ children }: Readonly<{ children: ReactNode }>) {
       <header className={styles.topbar}>
         <span>Memento Loop</span>
         <span className={styles.divider}>/</span>
-        <span className={styles.context}>Walmart · Miro Spark</span>
+        <span className={styles.context}>{process.env.MEMENTO_SERVING_MODE === "cloudflare" ? "Customer workspace" : "Walmart · Miro Spark"}</span>
       </header>
       <nav className={styles.sidebar} aria-label="Product navigation">
-        <span className={`${styles.item} ${styles.active}`} aria-current="page">Memento Signal</span>
+        <span className={`${styles.item} ${styles.active}`} aria-current="page">Monday report &amp; attention</span>
       </nav>
       <main className={styles.main}>{children}</main>
     </div>

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
-test("redirects the retired Attention pane to Memento Signal", async ({ page }) => {
+test("redirects the retired Attention pane to the report", async ({ page }) => {
+  await page.route("**/api/signals**", (route) => route.fulfill({ status: 503, json: {} }));
   await page.goto("/attention");
-  await expect(page).toHaveURL(/\/signal$/);
-  await expect(page.getByText("Memento Signal").first()).toBeVisible();
+  await expect(page).toHaveURL(/\/report$/);
 });

@@ -1,0 +1,53 @@
+.page { display: grid; gap: 24px; max-width: 1400px; margin: auto; }
+.header { display: flex; align-items: start; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.header h1 { font-size: clamp(30px, 4vw, 44px); letter-spacing: -.04em; margin: 5px 0 10px; }
+.header p, .context p { line-height: 1.6; color: var(--muted); }
+.eyebrow { color: #375d90; font-size: 11px; font-weight: 750; letter-spacing: .07em; text-transform: uppercase; }
+.badge { border: 1px solid #c8d8ef; border-radius: 30px; padding: 8px 12px; color: #375d90; background: #f1f6fc; font-size: 12px; }
+.context { border-block: 1px solid var(--border); padding: 15px 0; font-size: 13px; }
+.cards { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 18px; }
+.summary, .detail { padding: 24px; border: 1px solid var(--border); border-radius: 14px; background: white; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.summary h2 { font-size: 34px; letter-spacing: -.025em; }
+.summary h2 span { display: block; font-size: 13px; color: var(--muted); font-weight: 400; letter-spacing: 0; }
+.summary h3 { font-size: 18px; }
+.leader { border-top: 1px solid var(--border); padding-top: 18px; font-size: 11px; color: var(--muted); margin-top: 10px; }
+.amount { color: #214e87; font-weight: 650; line-height: 1.6; margin-bottom: 12px; }
+.summary button, .summary a, .state button { padding: 12px; background: #edf3fb; color: #214e87; border: 1px solid #c8d8ef; border-radius: 7px; font-size: 13px; font-weight: 600; text-align: left; margin-top: auto; }
+.notice { font-size: 12px; line-height: 1.65; color: var(--muted); max-width: 1000px; }
+.linkButton { color: #214e87; font-size: 13px; text-align: left; padding: 6px 0; width: fit-content; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.filters button { border: 1px solid var(--border); background: white; padding: 9px 14px; border-radius: 30px; font-size: 12px; }
+.filters button[aria-pressed=true] { background: #244c80; color: white; border-color: #244c80; }
+.workspace { display: grid; grid-template-columns: minmax(240px,.65fr) minmax(400px,1.35fr); gap: 24px; align-items: start; }
+.workspace aside { min-width: 0; }
+.list { display: grid; gap: 8px; }
+.list button { display: flex; flex-direction: column; gap: 8px; padding: 17px; text-align: left; background: white; border: 1px solid var(--border); border-radius: 10px; font-size: 12px; line-height: 1.4; }
+.list button[aria-pressed=true] { border-color: #2263bf; background: #f2f6fc; box-shadow: inset 3px 0 #2263bf; }
+.list strong { font-size: 15px; }
+.list small { color: var(--muted); font-size: 11px; }
+.detail h2 { font-size: 24px; }
+.detail > p { line-height: 1.6; font-size: 13px; }
+.facts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px; padding-block: 16px; border-block: 1px solid var(--border); }
+.facts div { display: flex; flex-direction: column; gap: 7px; }
+.facts span { font-size: 11px; color: var(--muted); }
+.facts strong { font-size: 21px; }
+.chart { margin: 12px 0; }
+.chart figcaption strong { font-size: 15px; }
+.chart figcaption p { font-size: 11px; color: var(--muted); line-height: 1.6; margin-top: 6px; }
+.chart svg { display: block; width: 100%; margin-top: 14px; }
+.chartLegend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11px; color: var(--muted); }
+.chartLegend span { display: flex; align-items: center; gap: 5px; }
+.chartLegend i { width: 12px; height: 3px; }
+.technical { border-top: 1px solid var(--border); padding-top: 16px; font-size: 12px; line-height: 1.8; min-width: 0; }
+.technical summary { cursor: pointer; font-weight: 600; color: #375d90; }
+.technical dl, .technical p { margin-top: 12px; overflow-wrap: anywhere; }
+.technical dt { color: var(--muted); }
+.technical dd { margin-bottom: 8px; font-family: ui-monospace, monospace; font-size: 11px; }
+.tableScroll { max-width: 100%; overflow: auto; margin-top: 16px; }
+.tableScroll table { border-collapse: collapse; font-size: 11px; white-space: nowrap; width: 100%; }
+.tableScroll th, .tableScroll td { padding: 7px; border-bottom: 1px solid var(--border); text-align: right; }
+.tableScroll caption { text-align: left; font-weight: 600; }
+.state { display: grid; gap: 18px; padding: 50px 0; max-width: 700px; line-height: 1.6; }
+.page button:focus-visible, .state button:focus-visible, .technical summary:focus-visible { outline: 3px solid #2263bf; outline-offset: 3px; }
+@media(max-width: 1050px) { .cards { grid-template-columns: 1fr; } .workspace { grid-template-columns: 1fr; } .list { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media(max-width: 600px) { .list { grid-template-columns: 1fr; } .summary, .detail { padding: 18px; } }

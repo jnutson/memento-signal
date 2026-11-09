@@ -1,12 +1,13 @@
+import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   plugins: [react()],
-  resolve: { alias: { "@": new URL(".", import.meta.url).pathname } },
+  resolve: { alias: { "@": fileURLToPath(new URL(".", import.meta.url)) } },
   test: {
     environment: "jsdom",
     setupFiles: ["./tests/setup.ts"],
-    exclude: ["tests/e2e/**", "tests/fullstack/**", "node_modules/**", ".next/**"],
+    exclude: ["tests/e2e/**", "tests/fullstack/**", "tests/hosted/**", "tests/security/**", "node_modules/**", ".next/**", ".next-security/**"],
   },
 });

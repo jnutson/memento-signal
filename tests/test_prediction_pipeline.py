@@ -36,7 +36,7 @@ def _canonical_fixture(root: Path) -> Path:
         path = folder / "part-00000.parquet"
         con.execute(f"COPY ({query}) TO '{path}' (FORMAT PARQUET, COMPRESSION ZSTD)")
         files.append({"path": str(path.relative_to(canonical)), "bytes": path.stat().st_size, "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "rows": con.execute(f"SELECT count(*) FROM ({query})").fetchone()[0]})
-    manifest = {"dataset_id": "mds_fixture", "as_of": "2027-01-30T12:00:00Z", "source_release_set_id": "fixture-release-set", "source_release_set_manifest_sha256": "c" * 64, "source_release_ids": ["fixture-walmart", "fixture-extension"], "source_manifests": {"walmart_sha256": "a" * 64, "extension_sha256": "b" * 64}, "files": files}
+    manifest = {"source_classification": "synthetic", "dataset_id": "mds_fixture", "as_of": "2027-01-30T12:00:00Z", "source_release_set_id": "fixture-release-set", "source_release_set_manifest_sha256": "c" * 64, "source_release_ids": ["fixture-walmart", "fixture-extension"], "source_manifests": {"walmart_sha256": "a" * 64, "extension_sha256": "b" * 64}, "files": files}
     (canonical / "manifest.json").write_text(json.dumps(manifest, sort_keys=True, separators=(",", ":")))
     return canonical
 

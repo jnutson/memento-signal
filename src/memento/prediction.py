@@ -15,6 +15,7 @@ import duckdb
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from .ownership import require_owner
 from .manifest import canonical_json, sha256_file
 from .metrics import (
     HORIZON_DAYS, bias_factor, confidence_score, data_completeness, demand_paths,
@@ -148,8 +149,10 @@ def _choose_wape(key, product_id, pairs_by_key, item_stats, brand_stats):
 def run_predictions(canonical_root: Path, *, data_root: Path) -> Path:
     canonical_root = canonical_root.resolve(strict=True)
     source_manifest = _require_canonical(canonical_root)
+    require_owner(data_root.resolve(), source_manifest)
     identity = {
-        "canonical_dataset_id": source_manifest["dataset_id"], "metric_contract_version": METRIC_CONTRACT_VERSION,
+        "canonical_dataset_id": source_manifest["dataset_id"],
+        **({"tenant_id": source_manifest["tenant_id"]} if "tenant_id" in source_manifest else {}), "metric_contract_version": METRIC_CONTRACT_VERSION,
         "demand_forecast_version": DEMAND_FORECAST_VERSION, "inventory_projection_version": INVENTORY_PROJECTION_VERSION,
         "ranker_version": RANKER_VERSION, "configuration_hash": CONFIGURATION_HASH,
     }

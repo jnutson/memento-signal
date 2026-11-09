@@ -1,0 +1,33 @@
+name: memento-${TENANT_ID:?set a reviewed customer identifier}
+services:
+  api:
+    image: ${MEMENTO_API_IMAGE:?set a reviewed image digest}
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 1536m
+    cpus: 2
+    restart: unless-stopped
+    ports: ["127.0.0.1:${API_PORT:-8000}:8000"]
+    environment:
+      MEMENTO_SERVING_MODE: cloudflare
+      MEMENTO_SECURITY_POLICY: /run/memento/policy.json
+      MEMENTO_DATA_ROOT: /srv/memento
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - type: bind
+        source: ${CUSTOMER_SERVING_ROOT:?dedicated approved customer serving root}
+        target: /srv/memento
+        read_only: true
+      - type: bind
+        source: ${CUSTOMER_POLICY_DIRECTORY:?reviewed operator-owned control directory containing policy.json}
+        target: /run/memento
+        read_only: true
+    tmpfs: ["/tmp:size=16m,noexec,nosuid,nodev"]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/livez', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      retries: 3

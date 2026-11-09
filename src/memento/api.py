@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import os
+import uuid
+from collections.abc import Callable
+from contextvars import ContextVar
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -9,9 +12,11 @@ from typing import Annotated, Literal, cast
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, model_validator
 
 from .serving import PredictionStore, SignalStore, SIGNAL_ID
+from .security import SecurityPolicy, ServingSecurity, audit
 
 
 API_CONTRACT_VERSION = "memento-attention-api-v1"
@@ -216,6 +221,30 @@ class SignalQueueResponse(WireModel):
     signals: Annotated[list[SignalRow], Field(max_length=10)]
 
 
+class ReportScope(WireModel):
+    classification: Literal["synthetic", "internal", "confidential_customer"]
+    observed_from: date
+    observed_through: date
+    horizon_from: date
+    horizon_through: date
+    item_count: Annotated[int, Field(ge=1)]
+    store_count: Annotated[int, Field(ge=1)]
+
+
+class ReportCategory(WireModel):
+    signal_type: Literal["availability", "inventory_imbalance", "demand_momentum"]
+    signal_direction: Literal["acceleration"] | None
+    candidate_count: Annotated[int, Field(ge=0)]
+    leading_signal: SignalRow | None
+
+
+class MondayReportResponse(WireModel):
+    api_contract_version: Literal["memento-signal-api-v1"] = SIGNAL_API_CONTRACT_VERSION
+    run: SignalRunMetadata
+    scope: ReportScope
+    categories: Annotated[list[ReportCategory], Field(min_length=3, max_length=3)]
+
+
 class SignalEvidenceRow(WireModel):
     signal_id: Annotated[str, Field(pattern=r"^sig_[0-9a-f]{64}$")]
     evidence_type: Literal["historical_week", "forward_demand", "inventory_projection"]
@@ -331,6 +360,7 @@ class SignalDetailResponse(WireModel):
     signal: SignalDetailRow
     evidence: list[SignalEvidenceRow]
     supply_context: SupplyContext | None = None
+    projected_depletion_date: date | None = None
 
 
 class ApiProblem(Exception):
@@ -481,15 +511,164 @@ def _validated_signal_evidence(signal: SignalDetailRow, evidence: list[SignalEvi
         raise ValueError("demand momentum evidence must contain eight historical weeks and 28 forward days")
 
 
-def create_app(data_root: Path) -> FastAPI:
+def read_signal_queue(signal_store: Callable[[str | None], SignalStore], signal_type: Literal["availability", "demand_momentum", "inventory_imbalance"] | None = None, signal_direction: Literal["acceleration", "deceleration"] | None = None, signal_set_id: str | None = None) -> SignalQueueResponse:
+    try:
+        store = signal_store(signal_set_id)
+        manifest = store.run()
+        rows = store.top_signals(signal_type, signal_direction)
+        _validate_signal_queue_release(manifest, rows, signal_type)
+        identities = store.display_identities(rows) if rows else {}
+        signals = []
+        for row in rows:
+            payload = {name: row[name] for name in SignalRow.model_fields if name != "identity"}
+            signals.append(SignalRow.model_validate({**payload, "identity": identities[str(row["signal_id"])]}))
+        run_values = {name: manifest.get(name) for name in SignalRunMetadata.model_fields}
+        configuration = manifest.get("configuration", {})
+        if not isinstance(configuration,dict):
+            raise ValueError("invalid signal configuration")
+        run_values.update(calibration_status=configuration.get("calibration_status"),
+                          supply_projection_counts=configuration.get("projection_counts"))
+        run = SignalRunMetadata.model_validate(run_values)
+        return SignalQueueResponse(run=run, signals=signals)
+    except (FileNotFoundError, OSError, ValueError, KeyError, TypeError) as exc:
+        raise _signal_problem(503, "release_integrity_error", "The Memento Signal release failed integrity validation.") from exc
+
+
+def read_monday_report(signal_store: Callable[[str | None], SignalStore], signal_set_id: str | None = None) -> MondayReportResponse:
+    try:
+        store = signal_store(signal_set_id)
+        manifest = store.run()
+        configuration = manifest.get("configuration", {})
+        if not isinstance(configuration, dict):
+            raise ValueError("invalid signal configuration")
+        run_values = {name: manifest.get(name) for name in SignalRunMetadata.model_fields}
+        run_values.update(calibration_status=configuration.get("calibration_status"),
+                          supply_projection_counts=configuration.get("projection_counts"))
+        cards = []
+        selections: list[tuple[Literal["availability", "inventory_imbalance", "demand_momentum"], Literal["acceleration"] | None]] = [("availability", None), ("inventory_imbalance", None), ("demand_momentum", "acceleration")]
+        for kind, direction in selections:
+            rows = store.top_signals(kind, direction)
+            _validate_signal_queue_release(manifest, rows, kind)
+            identities = store.display_identities(rows[:1]) if rows else {}
+            leader = None
+            if rows:
+                row = rows[0]
+                leader = SignalRow.model_validate({**{name: row[name] for name in SignalRow.model_fields if name != "identity"},
+                                                   "identity": identities[str(row["signal_id"])]})
+            cards.append(ReportCategory(signal_type=kind, signal_direction=direction,
+                                        candidate_count=store.category_count(kind, direction), leading_signal=leader))
+        return MondayReportResponse(run=SignalRunMetadata.model_validate(run_values),
+                                    scope=ReportScope.model_validate(store.report_scope()), categories=cards)
+    except (FileNotFoundError, OSError, ValueError, KeyError, TypeError) as exc:
+        raise _signal_problem(503, "release_integrity_error", "The synthetic demo publication failed integrity validation.") from exc
+
+
+def read_signal_detail(signal_store: Callable[[str | None], SignalStore], signal_id: str, signal_set_id: str | None = None) -> SignalDetailResponse:
+    if not SIGNAL_ID.fullmatch(signal_id):
+        raise _signal_problem(422, "invalid_signal_id", "The signal identifier is invalid.")
+    try:
+        store = signal_store(signal_set_id)
+        row = store.signal(signal_id)
+        if row is None:
+            raise _signal_problem(404, "signal_not_found", "The signal is not in the selected publication.")
+        identity = store.display_identities([row])[signal_id]
+        payload = {name: row[name] for name in SignalDetailRow.model_fields if name != "identity"}
+        detail = SignalDetailRow.model_validate({**payload, "identity": identity})
+        evidence = [SignalEvidenceRow.model_validate(item) for item in store.evidence(signal_id)]
+        _validated_signal_evidence(detail, evidence)
+        context = store.supply_context(signal_id)
+        return SignalDetailResponse(signal=detail, evidence=evidence, supply_context=SupplyContext.model_validate(context) if context is not None else None,
+                                    projected_depletion_date=min((row.evidence_date for row in evidence if row.path == "base" and row.ending_units == 0), default=None) if detail.signal_type == "availability" else None)
+    except ApiProblem:
+        raise
+    except ValueError as exc:
+        if "signal identity" in str(exc):
+            raise _signal_problem(422, "invalid_signal_id", "The signal identifier is invalid.") from exc
+        raise _signal_problem(503, "release_integrity_error", "The Memento Signal release failed integrity validation.") from exc
+    except (FileNotFoundError, OSError, KeyError, TypeError) as exc:
+        raise _signal_problem(503, "release_integrity_error", "The Memento Signal release failed integrity validation.") from exc
+
+
+def create_app(data_root: Path, demo_signal_set_id: str | None = None,
+               *, security: ServingSecurity | None = None) -> FastAPI:
     root = data_root.resolve()
-    app = FastAPI(title="Memento Attention API", version=API_CONTRACT_VERSION)
+    security = security if security is not None else ServingSecurity("local")
+    app = FastAPI(title="Memento Attention API", version=API_CONTRACT_VERSION,
+                  docs_url=None, redoc_url=None, openapi_url=None)
+    policy_context: ContextVar[SecurityPolicy | None] = ContextVar("serving_policy", default=None)
+
+    @app.middleware("http")
+    async def secure_request(request: Request, call_next):
+        request_id = uuid.uuid4().hex
+        subject = None
+        slot = False
+        context_token = None
+        def denied(status: int, code: str):
+            version = SIGNAL_API_CONTRACT_VERSION if request.url.path.startswith("/v1/signals") else API_CONTRACT_VERSION
+            return JSONResponse({"api_contract_version": version, "code": code,
+                                 "message": "The request cannot be completed."}, status_code=status)
+        try:
+            if request.url.path == "/livez" and request.method == "GET":
+                response = JSONResponse({"status": "ok"})
+            elif security.mode == "disabled":
+                response = denied(503, "serving_disabled")
+            elif security.mode == "local" and (request.client is None or request.client.host not in {"127.0.0.1", "::1", "testclient"}):
+                response = denied(403, "loopback_required")
+            elif request.method != "GET":
+                response = denied(405, "read_only")
+            elif (len(request.scope.get("query_string", b"")) > 4096 or len(request.url.path) > 2048
+                  or request.headers.get("content-length", "0") != "0" or "transfer-encoding" in request.headers):
+                response = denied(413, "request_too_large")
+            elif set(request.query_params) - {"signal_type", "signal_direction", "signal_set_id"}:
+                response = denied(422, "invalid_request")
+            elif not security.permit_request():
+                response = denied(429, "rate_limited")
+            else:
+                slot = security.slots.acquire(blocking=False)
+                if not slot:
+                    response = denied(429, "capacity_limited")
+                else:
+                    permitted = True
+                    if security.mode == "cloudflare":
+                        try:
+                            policy, subject = await run_in_threadpool(
+                                security.authorize, request.headers.get("cf-access-jwt-assertion", ""))
+                            context_token = policy_context.set(policy)
+                        except PermissionError:
+                            permitted = False
+                            response = denied(403, "access_denied")
+                        except Exception:
+                            permitted = False
+                            response = denied(401, "authentication_required")
+                    if permitted:
+                        response = await call_next(request)
+        except Exception:
+            response = denied(500, "internal_error")
+        finally:
+            if context_token is not None:
+                policy_context.reset(context_token)
+            if slot:
+                security.slots.release()
+        response.headers.update({"Cache-Control": "private, no-store", "CDN-Cache-Control": "no-store",
+                                 "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer",
+                                 "X-Frame-Options": "DENY", "X-Request-ID": request_id})
+        route = request.scope.get("route")
+        resource = request.url.path + "?" + str(request.query_params)
+        audit(response.status_code, getattr(route, "path", "unmatched"), subject, request_id, resource)
+        return response
 
     def prediction_store() -> PredictionStore:
-        return PredictionStore(root / "predictions", root / "canonical")
+        store = PredictionStore(root / "predictions", root / "canonical", policy=policy_context.get())
+        if security.mode == "local" and store.canonical_release(store.run())[1].get("source_classification") != "synthetic":
+            raise ValueError("local serving requires declared synthetic inputs")
+        return store
 
-    def signal_store() -> SignalStore:
-        return SignalStore(root / "signals", root / "canonical")
+    def signal_store(signal_set_id: str | None = None) -> SignalStore:
+        store = SignalStore(root / "signals", root / "canonical", signal_set_id or demo_signal_set_id,
+                            policy=policy_context.get())
+        if security.mode == "local" and store.canonical_release()[1].get("source_classification") != "synthetic":
+            raise ValueError("local serving requires declared synthetic inputs")
+        return store
 
     @app.exception_handler(ApiProblem)
     async def api_problem_handler(_request: Request, exc: ApiProblem) -> JSONResponse:
@@ -583,54 +762,29 @@ def create_app(data_root: Path) -> FastAPI:
             raise ApiProblem(503, "release_integrity_error", "The Attention release failed integrity validation.") from exc
 
     @app.get("/v1/signals", response_model=SignalQueueResponse, responses={503: {"model": SignalApiError}})
-    def signal_queue(signal_type: Literal["availability", "demand_momentum", "inventory_imbalance"] | None = None) -> SignalQueueResponse:
-        try:
-            store = signal_store()
-            manifest = store.run()
-            rows = store.top_signals(signal_type)
-            _validate_signal_queue_release(manifest, rows, signal_type)
-            identities = store.display_identities(rows) if rows else {}
-            signals = []
-            for row in rows:
-                payload = {name: row[name] for name in SignalRow.model_fields if name != "identity"}
-                signals.append(SignalRow.model_validate({**payload, "identity": identities[str(row["signal_id"])]}))
-            run_values = {name: manifest.get(name) for name in SignalRunMetadata.model_fields}
-            configuration = manifest.get("configuration", {})
-            if not isinstance(configuration,dict):
-                raise ValueError("invalid signal configuration")
-            run_values.update(calibration_status=configuration.get("calibration_status"),
-                              supply_projection_counts=configuration.get("projection_counts"))
-            run = SignalRunMetadata.model_validate(run_values)
-            return SignalQueueResponse(run=run, signals=signals)
-        except (FileNotFoundError, OSError, ValueError, KeyError, TypeError) as exc:
-            raise _signal_problem(503, "release_integrity_error", "The Memento Signal release failed integrity validation.") from exc
+    def signal_queue(signal_type: Literal["availability", "demand_momentum", "inventory_imbalance"] | None = None,
+                     signal_direction: Literal["acceleration", "deceleration"] | None = None,
+                     signal_set_id: str | None = None) -> SignalQueueResponse:
+        return read_signal_queue(signal_store, signal_type, signal_direction, signal_set_id)
+
+    @app.get("/v1/signals/report", response_model=MondayReportResponse)
+    def monday_report(signal_set_id: str | None = None) -> MondayReportResponse:
+        return read_monday_report(signal_store, signal_set_id)
 
     @app.get("/v1/signals/{signal_id}", response_model=SignalDetailResponse, responses={404: {"model": SignalApiError}, 422: {"model": SignalApiError}, 503: {"model": SignalApiError}})
-    def signal_detail(signal_id: str) -> SignalDetailResponse:
-        if not SIGNAL_ID.fullmatch(signal_id):
-            raise _signal_problem(422, "invalid_signal_id", "The signal identifier is invalid.")
-        try:
-            store = signal_store()
-            row = store.signal(signal_id)
-            if row is None:
-                raise _signal_problem(404, "signal_not_found", "The signal is not in the current overall top ten.")
-            identity = store.display_identities([row])[signal_id]
-            payload = {name: row[name] for name in SignalDetailRow.model_fields if name != "identity"}
-            detail = SignalDetailRow.model_validate({**payload, "identity": identity})
-            evidence = [SignalEvidenceRow.model_validate(item) for item in store.evidence(signal_id)]
-            _validated_signal_evidence(detail, evidence)
-            context = store.supply_context(signal_id)
-            return SignalDetailResponse(signal=detail, evidence=evidence, supply_context=SupplyContext.model_validate(context) if context is not None else None)
-        except ApiProblem:
-            raise
-        except ValueError as exc:
-            if "signal identity" in str(exc):
-                raise _signal_problem(422, "invalid_signal_id", "The signal identifier is invalid.") from exc
-            raise _signal_problem(503, "release_integrity_error", "The Memento Signal release failed integrity validation.") from exc
-        except (FileNotFoundError, OSError, KeyError, TypeError) as exc:
-            raise _signal_problem(503, "release_integrity_error", "The Memento Signal release failed integrity validation.") from exc
+    def signal_detail(signal_id: str, signal_set_id: str | None = None) -> SignalDetailResponse:
+        return read_signal_detail(signal_store, signal_id, signal_set_id)
 
     return app
 
 
-app = create_app(Path(os.environ.get("MEMENTO_DATA_ROOT", "data")))
+def configured_app() -> FastAPI:
+    mode = os.environ.get("MEMENTO_SERVING_MODE", "disabled")
+    if mode not in {"disabled", "cloudflare"}:
+        raise ValueError("ASGI serving requires disabled or cloudflare mode; use the loopback CLI for local demos")
+    policy = os.environ.get("MEMENTO_SECURITY_POLICY")
+    return create_app(Path(os.environ.get("MEMENTO_DATA_ROOT", "data")),
+                      security=ServingSecurity(cast(Literal["disabled", "cloudflare"], mode), Path(policy) if policy else None))
+
+
+app = configured_app()
