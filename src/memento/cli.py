@@ -11,12 +11,16 @@ from .orchestrator import ingest
 def main() -> int:
     parser = argparse.ArgumentParser(description="Publish a Walmart observable release as Memento Retail V1")
     parser.add_argument("manifest", type=Path)
-    parser.add_argument("--classification", required=True, choices=("synthetic", "internal"))
+    parser.add_argument("--classification", required=True, choices=("synthetic", "internal", "confidential_customer"))
     parser.add_argument("--data-root", type=Path, default=Path("data"))
+    parser.add_argument("--tenant-id", help="Explicit owner; tenant runs require a dedicated output root")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     try:
-        path = ingest(args.manifest, data_root=args.data_root, classification=args.classification)
+        path = ingest(args.manifest, data_root=args.data_root, classification=args.classification, tenant_id=args.tenant_id)
+    except ValueError:
+        logging.error("Tenant configuration is invalid; no customer payloads are logged")
+        return 2
     except IngestionFailure as exc:
         logging.error("phase=%s failed_rules=%s", exc.phase, ",".join(r.rule_id for r in exc.results if r.severity == "FAIL"))
         return 2

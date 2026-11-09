@@ -4,12 +4,13 @@ from datetime import date, timedelta
 from math import fsum
 
 import duckdb
+from .query import serving_connection
 
 
 def exposure_summary(root: Path, manifest: dict) -> dict:
     """Dollarize distinct finding members, not counts or hypothetical action benefits."""
     buckets = []
-    with duckdb.connect() as con:
+    with serving_connection(root) as con:
         for key, codes, basis in (
             ("z", ["current_out_of_stock", "promised_distribution_gap"],
              "Next 28 days: unmet retail demand at currently zero-inventory stores, assuming eligible retailer plans arrive."),
@@ -42,7 +43,7 @@ def exposure_summary(root: Path, manifest: dict) -> dict:
 
 
 def display_series(root: Path, manifest: dict, product_id: str, finding_id: str | None) -> dict:
-    with duckdb.connect() as con:
+    with serving_connection(root) as con:
         if finding_id:
             con.execute("CREATE TEMP TABLE members AS SELECT location_id,product_id FROM read_parquet(?) WHERE finding_id=? AND product_id=?",
                         [str(root / "finding_evidence.parquet"), finding_id, product_id])

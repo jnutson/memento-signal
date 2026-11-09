@@ -6,7 +6,8 @@ test("opens the published briefing and release report with real API data", async
   const responsePromise = page.waitForResponse((response) =>
     response.url().endsWith("/api/signals"),
   );
-  await page.goto("/");
+  // Root belongs to the current Weekly UI; retain this legacy briefing journey.
+  await page.goto("/monday");
   const response = await responsePromise;
   expect(response.ok()).toBe(true);
   const queue = await response.json();

@@ -15,6 +15,7 @@ import duckdb
 from .canonical import CONTRACT_VERSION, SCHEMAS
 from .duckdb_utils import fetchone_required
 from .manifest import canonical_json, inspect_manifest, sha256_file, validate_manifest_contract
+from .ownership import bind_owner, verify_source_owner
 from .models import IngestionFailure, ValidationResult
 from .miro import MAPPING as MIRO_MAPPING, canonicalize_extension, validate_extension_data
 from .release_set import inspect_release_set, release_set_identity, validate_release_set
@@ -164,10 +165,15 @@ def _manifest_files(con: duckdb.DuckDBPyConnection, candidate: Path) -> list[dic
     return files
 
 
-def ingest_release_set(manifest_path: Path, *, data_root: Path, classification: str) -> Path:
+def ingest_release_set(manifest_path: Path, *, data_root: Path, classification: str, tenant_id: str | None = None) -> Path:
+    if classification not in ALLOWED_SOURCE_CLASSIFICATIONS and not (classification == "confidential_customer" and tenant_id is not None):
+        raise ValueError("classification requires an explicit approved owner")
+    bind_owner(data_root.resolve(), tenant_id)
     root = _safe_data_root(data_root)
     source = inspect_release_set(manifest_path, classification)
-    dataset_id = _release_set_dataset_id(release_set_identity(source))
+    for document in (source.manifest, source.walmart.manifest, source.extension.manifest):
+        verify_source_owner(document, tenant_id)
+    dataset_id = _release_set_dataset_id(release_set_identity(source) + (tenant_id.encode() if tenant_id else b""))
     published = root / "canonical" / dataset_id
     run_id = "run_" + uuid.uuid4().hex
     run_root = root / "staging" / run_id
@@ -204,6 +210,7 @@ def ingest_release_set(manifest_path: Path, *, data_root: Path, classification: 
         _ensure_pass("canonical_validation", canonical_results)
         content = {
             "dataset_id": dataset_id,
+            **({"tenant_id": tenant_id} if tenant_id else {}),
             "slice": source.manifest.get("slice"),
             "calibration_status": source.manifest.get("calibration_status"),
             "supply_model": source.manifest.get("supply_model"),
@@ -242,8 +249,8 @@ def ingest_release_set(manifest_path: Path, *, data_root: Path, classification: 
             shutil.rmtree(run_root)
 
 
-def ingest(manifest_path: Path, *, data_root: Path, classification: str) -> Path:
-    if classification not in ALLOWED_SOURCE_CLASSIFICATIONS:
+def ingest(manifest_path: Path, *, data_root: Path, classification: str, tenant_id: str | None = None) -> Path:
+    if classification not in ALLOWED_SOURCE_CLASSIFICATIONS and not (classification == "confidential_customer" and tenant_id is not None):
         raise IngestionFailure(
             "source_validation",
             [
@@ -255,15 +262,18 @@ def ingest(manifest_path: Path, *, data_root: Path, classification: str) -> Path
                 )
             ],
         )
+    bind_owner(data_root.resolve(), tenant_id)
     try:
         preview = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError):
         preview = {}
+    if isinstance(preview, dict):
+        verify_source_owner(preview, tenant_id)
     if isinstance(preview, dict) and {"walmart_manifest", "extension_manifest"} <= set(preview):
-        return ingest_release_set(manifest_path, data_root=data_root, classification=classification)
+        return ingest_release_set(manifest_path, data_root=data_root, classification=classification, tenant_id=tenant_id)
     root = _safe_data_root(data_root)
     inventory = inspect_manifest(manifest_path, classification)
-    dataset_id = _dataset_id(inventory.manifest_sha256)
+    dataset_id = _dataset_id(inventory.manifest_sha256 + (tenant_id or ""))
     published = root / "canonical" / dataset_id
     run_id = "run_" + uuid.uuid4().hex
     run_root = root / "staging" / run_id
@@ -319,7 +329,7 @@ def ingest(manifest_path: Path, *, data_root: Path, classification: str) -> Path
             else:
                 bounds = {}
             files.append({"path":str(path.relative_to(candidate)),"bytes":path.stat().st_size,"sha256":sha256_file(path),"rows":rows,**bounds})
-        release_manifest = {"dataset_id":dataset_id,"canonical_contract_version":CONTRACT_VERSION,"source_classification":classification,"source":{"manifest_path":str(inventory.manifest_path),"manifest_sha256":inventory.manifest_sha256,"release_id":inventory.manifest["release_id"],"as_of":inventory.manifest["as_of"]},"adapter":{"id":ADAPTER_ID,"version":ADAPTER_VERSION},"transformation_version":TRANSFORMATION_VERSION,"validation_contract_version":VALIDATION_VERSION,"dataset_mapping":MAPPING,"validation_results":[r.to_dict() for r in results if r.severity != "FAIL"],"files":files}
+        release_manifest = {"dataset_id":dataset_id, **({"tenant_id": tenant_id} if tenant_id else {}),"canonical_contract_version":CONTRACT_VERSION,"source_classification":classification,"source":{"manifest_path":str(inventory.manifest_path),"manifest_sha256":inventory.manifest_sha256,"release_id":inventory.manifest["release_id"],"as_of":inventory.manifest["as_of"]},"adapter":{"id":ADAPTER_ID,"version":ADAPTER_VERSION},"transformation_version":TRANSFORMATION_VERSION,"validation_contract_version":VALIDATION_VERSION,"dataset_mapping":MAPPING,"validation_results":[r.to_dict() for r in results if r.severity != "FAIL"],"files":files}
         (candidate / "manifest.json").write_bytes(canonical_json(release_manifest))
         (root / "canonical").mkdir(parents=True, exist_ok=True)
         try:

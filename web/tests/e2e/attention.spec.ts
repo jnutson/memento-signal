@@ -9,7 +9,8 @@ test("preserves existing pages and exposes the Metrics navigation entry", async 
       json: { api_contract_version: "memento-signal-api-v1", run, signals },
     }),
   );
-  await page.goto("/");
+  // The current product opens at Weekly; verify the retained original briefing directly.
+  await page.goto("/monday");
   await expect(page).toHaveURL(/\/monday$/);
   const navigation = page.getByRole("navigation", {
     name: "Product navigation",

@@ -48,7 +48,7 @@ def metric_fixture(root: Path):
 def refresh_manifest(canonical):
     files = [{"path": str(p.relative_to(canonical)), "bytes": p.stat().st_size, "sha256": sha256_file(p)}
              for p in sorted(canonical.rglob("*.parquet"))]
-    manifest = {"dataset_id": "mds_metric_fixture", "as_of": "2026-11-28T12:00:00Z",
+    manifest = {"source_classification": "synthetic", "dataset_id": "mds_metric_fixture", "as_of": "2026-11-28T12:00:00Z",
                 "source_release_set_manifest_sha256": "a"*64, "files": files}
     (canonical / "manifest.json").write_bytes(canonical_json(manifest))
 

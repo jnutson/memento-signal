@@ -12,6 +12,7 @@ import pyarrow.parquet as pq
 
 from .manifest import canonical_json, sha256_file
 from .models import IngestionFailure, ValidationResult
+from .ownership import require_owner
 from .signal_contract import EVIDENCE_SCHEMA, SIGNAL_CONTRACT_VERSION, SIGNAL_PUBLICATION_VERSION, SIGNAL_RANKER_VERSION, SIGNAL_SCHEMA, SIGNAL_TYPE_ORDER, PRIORITY_SCHEMA, URGENCY_POLICY_VERSION, URGENCY_RANKER_VERSION
 
 
@@ -21,6 +22,7 @@ def publish_signal_set(
     reason_codes: list[str] | None = None,
     supply_context: list[dict[str, str]] | None = None,
 ) -> Path:
+    require_owner(data_root.resolve(), canonical_manifest)
     config_hash = hashlib.sha256(canonical_json(configuration)).hexdigest()
     metric_version = "memento-signal-metrics-v1.1.0" if supply_context is not None else SIGNAL_CONTRACT_VERSION
     ranker_version = "memento-signal-actionability-ranker-v1" if supply_context is not None else SIGNAL_RANKER_VERSION
@@ -29,6 +31,7 @@ def publish_signal_set(
         metric_version, ranker_version = "memento-signal-metrics-v1.2.0", URGENCY_RANKER_VERSION
     identity = {
         "canonical_dataset_id": canonical_manifest["dataset_id"],
+        **({"tenant_id": canonical_manifest["tenant_id"]} if canonical_manifest.get("tenant_id") else {}),
         "source_manifest_hashes": canonical_manifest.get("source_manifests", {}),
         "signal_as_of": canonical_manifest["as_of"], "metric_contract_version": metric_version,
         "signal_publication_version": SIGNAL_PUBLICATION_VERSION, "ranker_version": ranker_version,

@@ -27,13 +27,14 @@ def main() -> int:
     parser.add_argument("--excess-cover-days", type=int, default=40)
     parser.add_argument("--annual-carrying-cost-rate", type=float, default=None)
     parser.add_argument("--demand-model", choices=["retailer_baseline", "historical_adjusted"], default="retailer_baseline")
+    parser.add_argument("--tenant-id")
     args = parser.parse_args()
     config = MetricConfig(args.tier_baseline_end, args.minimum_coverage, args.trend_percent,
                           args.trend_minimum_units, args.weekly_persistence,
                           args.trend_minimum_dollars,args.minimum_weekday_observations,args.quality_window_days,args.demand_model,
                           args.excess_cover_days,args.annual_carrying_cost_rate)
     release, distribution = series_entry(args.series, args.cutoff)
-    canonical = ingest(release, data_root=args.data_root, classification="synthetic")
+    canonical = ingest(release, data_root=args.data_root, classification="synthetic", tenant_id=args.tenant_id)
     result = publish_metrics(canonical, distribution, data_root=args.data_root, config=config, activate=not args.no_activate)
     print(result)
     return 0
