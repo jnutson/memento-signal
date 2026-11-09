@@ -5,6 +5,7 @@ from math import fsum
 from pathlib import Path
 
 import duckdb
+from .query import serving_connection
 
 
 @dataclass(frozen=True)
@@ -35,7 +36,7 @@ def _complete(values):
 def attention_values(root: Path, manifest: dict, *, finding_id: str | None = None,
                      assumptions: AttentionAssumptions = AttentionAssumptions()) -> dict:
     observed = date.fromisoformat(manifest["observation_date"])
-    with duckdb.connect() as con:
+    with serving_connection(root) as con:
         con.execute("""CREATE TEMP TABLE population AS SELECT e.finding_id,e.finding_code,e.product_id,e.location_id,
             e.inventory_capital_amount,e.retail_exposure_amount,s.consecutive_zero_days,
             f.unit_retail_amount,f.demand_base_28d,e.event_date,

@@ -1,3 +1,4 @@
+import { workspacePath } from "@/lib/workspace-path";
 import { z } from "zod";
 import { allRows } from "@/lib/connected/client";
 import { findingId, periodSchema, releaseId } from "@/lib/connected/schema";
@@ -79,10 +80,13 @@ export async function loadAttention(
 ) {
   const query = new URLSearchParams({ release_id: release });
   if (finding) query.set("finding_id", finding);
-  const response = await fetch(`/api/metrics/attention-values?${query}`, {
-    signal,
-    cache: "no-store",
-  });
+  const response = await fetch(
+    workspacePath(`/api/metrics/attention-values?${query}`),
+    {
+      signal,
+      cache: "no-store",
+    },
+  );
   if (!response.ok)
     throw new Error(
       "Attention valuation unavailable; no count was substituted for dollars.",
@@ -110,7 +114,9 @@ export async function loadAttention(
 }
 export async function loadExposure(release: string, signal?: AbortSignal) {
   const response = await fetch(
-    `/api/metrics/exposure-summary?release_id=${encodeURIComponent(release)}`,
+    workspacePath(
+      `/api/metrics/exposure-summary?release_id=${encodeURIComponent(release)}`,
+    ),
     { signal, cache: "no-store" },
   );
   if (!response.ok) throw new Error("Modeled exposure is unavailable.");
@@ -278,10 +284,13 @@ export async function loadSeries(
     product_id: product,
   });
   if (finding) query.set("finding_id", finding);
-  const response = await fetch(`/api/metrics/display-series?${query}`, {
-    signal,
-    cache: "no-store",
-  });
+  const response = await fetch(
+    workspacePath(`/api/metrics/display-series?${query}`),
+    {
+      signal,
+      cache: "no-store",
+    },
+  );
   if (!response.ok)
     throw new Error(
       "Chart evidence is unavailable. No synthetic series was substituted.",

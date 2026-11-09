@@ -1,3 +1,4 @@
+import { workspacePath } from "@/lib/workspace-path";
 import { type ZodType } from "zod";
 import {
   signalDetailSchema,
@@ -12,7 +13,7 @@ async function validated<T>(
   schema: ZodType<T>,
   signal?: AbortSignal,
 ): Promise<T> {
-  const response = await fetch(url, {
+  const response = await fetch(workspacePath(url), {
     cache: "no-store",
     signal,
     headers: { Accept: "application/json" },

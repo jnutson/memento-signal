@@ -27,6 +27,11 @@ from .investigation_contract import Investigation
 from .serving import SIGNAL_ID, SignalStore
 from .signal_contract import PRIORITY_FIELDS
 from .metric_serving import metric_router
+import json
+import re
+from .metric_source import member
+from .security import ServingSecurity
+from .http_security import install_security, environment_security
 
 
 OPTIONAL_PRIORITY_FIELDS = {name for name, _ in PRIORITY_FIELDS}
@@ -48,13 +53,23 @@ def _signal_problem(status_code: int, code: str, message: str) -> ApiProblem:
     return ApiProblem(status_code, code, message)
 
 
-def create_app(data_root: Path) -> FastAPI:
+def create_app(data_root: Path, *, security: ServingSecurity | None = None) -> FastAPI:
     root = data_root.resolve()
-    app = FastAPI(title="Memento Signal API", version=SIGNAL_API_CONTRACT_VERSION)
+    app = FastAPI(title="Memento Signal API", version=SIGNAL_API_CONTRACT_VERSION, docs_url=None, redoc_url=None, openapi_url=None)
+    serving_security = security if security is not None else ServingSecurity("local")
+    install_security(app, serving_security)
     app.include_router(metric_router(root))
 
     def signal_store() -> SignalStore:
-        return SignalStore(root / "signals", root / "canonical")
+        store = SignalStore(root / "signals", root / "canonical")
+        if serving_security.mode == "local":
+            dataset = store.run().get("canonical_dataset_id")
+            if not isinstance(dataset, str) or not re.fullmatch(r"mds_[A-Za-z0-9_]+", dataset):
+                raise ValueError("invalid canonical identity")
+            manifest = member(root / "canonical", dataset + "/manifest.json")
+            if json.loads(manifest.read_bytes()).get("source_classification") != "synthetic":
+                raise ValueError("local serving requires declared synthetic inputs")
+        return store
 
     @app.exception_handler(ApiProblem)
     async def api_problem_handler(_request: Request, exc: ApiProblem) -> JSONResponse:
@@ -237,4 +252,4 @@ def create_app(data_root: Path) -> FastAPI:
     return app
 
 
-app = create_app(Path(os.environ.get("MEMENTO_DATA_ROOT", "data")))
+app = create_app(Path(os.environ.get("MEMENTO_DATA_ROOT", "data")), security=environment_security())

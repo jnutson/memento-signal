@@ -1,3 +1,4 @@
+import { workspacePath } from "@/lib/workspace-path";
 import { z } from "zod";
 
 const n = z.number().finite();
@@ -288,7 +289,9 @@ export async function fetchInvestigation(
   signal: AbortSignal,
 ): Promise<Investigation> {
   const response = await fetch(
-    `/api/signals/${encodeURIComponent(id)}/investigation?signal_set_id=${encodeURIComponent(release)}`,
+    workspacePath(
+      `/api/signals/${encodeURIComponent(id)}/investigation?signal_set_id=${encodeURIComponent(release)}`,
+    ),
     { signal, cache: "no-store" },
   );
   if (response.status === 409) throw new Error("release_changed");

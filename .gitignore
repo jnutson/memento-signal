@@ -40,3 +40,6 @@ web/CLAUDE.md
 .DS_Store
 .idea/
 .vscode/
+
+web/.demo/
+web/.vercel/

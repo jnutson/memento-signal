@@ -1,0 +1,43 @@
+.field {
+  min-width: 0;
+}
+.caption {
+  display: block;
+  color: #626b75;
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 7px;
+}
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  border: 1px solid #dbe5ef;
+  border-radius: 18px;
+  background: #eff4fa;
+  padding: 3px;
+  max-width: 100%;
+}
+.field .segmented button {
+  border: 0;
+  border-radius: 14px;
+  padding: 8px 12px;
+  background: transparent;
+  font-size: 12px;
+  white-space: nowrap;
+  color: #384859;
+}
+.field .segmented button[aria-pressed="true"] {
+  background: #1769cf;
+  color: white;
+  box-shadow: 0 1px 3px #16375720;
+}
+.field .segmented button:focus-visible {
+  outline: 2px solid #1769cf;
+  outline-offset: 2px;
+}
+@media (max-width: 500px) {
+  .field .segmented button {
+    padding: 8px 10px;
+  }
+}

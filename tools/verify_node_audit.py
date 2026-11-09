@@ -45,8 +45,15 @@ def main() -> None:
 
     policy = json.loads(EXCEPTIONS_PATH.read_text(encoding="utf-8"))
     entries = policy.get("exceptions") if isinstance(policy, dict) else None
-    if not isinstance(entries, list) or len(entries) != 1:
-        raise SystemExit("expected one explicit development audit exception")
+    if not isinstance(entries, list):
+        raise SystemExit("audit exceptions must be a list")
+    if not entries:
+        if _vulnerabilities(_audit("--audit-level=high")):
+            raise SystemExit("dependency audit failed: no exceptions are authorized")
+        print("runtime and development audits clean; no exceptions")
+        return
+    if len(entries) != 1:
+        raise SystemExit("expected at most one explicit development audit exception")
     exception = entries[0]
     if not isinstance(exception, dict):
         raise SystemExit("development audit exception must be an object")
