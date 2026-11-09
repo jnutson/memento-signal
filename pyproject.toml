@@ -12,7 +12,7 @@ dependencies = [
   "mcp==2.3.0",
   "jsonschema>=4.26,<5",
   "fastapi>=0.116,<1",
-  "pyarrow>=21,<24",
+  "pyarrow>=21,<27",
   "pydantic>=2.11,<3",
   "uvicorn>=0.35,<1",
   "PyJWT[crypto]==2.15.1",
