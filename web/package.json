@@ -35,5 +35,10 @@
     "jsdom": "^27.0.0",
     "typescript": "^5.9.2",
     "vitest": "^5.0.5"
+  },
+  "overrides": {
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "11.0.5"
+    }
   }
 }
