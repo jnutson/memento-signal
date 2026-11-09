@@ -5,8 +5,8 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 import pytest
 
-from memento.api import create_app
-from memento.serving import SignalStore
+from memento.synthetic_api import create_app
+from memento.mcp_signal_store import SignalStore
 from memento.signal_publication import publish_signal_set
 from tools.demo import preflight, prepare_fixture
 

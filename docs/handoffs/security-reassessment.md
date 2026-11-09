@@ -1,5 +1,32 @@
 # Security reassessment and PR coverage
 
+## November 9 reconciliation
+
+PR #9 now reconciles the preserved work with the newer product tree. PR #7 had
+reached `main`, but PR #8 was subsequently merged into PR #7's source branch.
+The reconciliation includes that branch's security commit and preserves its
+complete frontend, customer HTTP boundary, CI checks, dependency policy, and
+container configuration.
+
+The unique MCP implementation is retained behind `mcp_signal_store` and
+`mcp_signal_reader`, sharing current Signal contracts and validators. Its local
+HTTP harness is synthetic-only and loopback-only; it is not mounted in the
+customer application. The obsolete alternative dashboard, prediction stack,
+duplicate serving configuration, and old browser assertions are superseded by
+the newer product implementation. Their original source remains preserved in
+commit `114fc10`. No customer data or local settings were migrated.
+
+Signal publications now preserve canonical ownership in their identity and reject
+cross-customer output roots before publication. Dependency locks include the MCP
+runtime while retaining the newer product's checks. The sections below describe
+the earlier preservation review; they are historical evidence, not the final
+combined branch's verification results. Final results are recorded in PR #9.
+
+The customer-data release prerequisites below remain in force. Resolving and
+merging source conflicts does not activate customer access or production hosting.
+
+## Original preservation assessment
+
 Reviewed November 8, 2026. This is a source/design assessment with synthetic local
 verification, not an independent penetration test or production approval.
 

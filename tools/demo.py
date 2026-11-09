@@ -9,8 +9,8 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from memento.api import create_app
-from memento.serving import SIGNAL_SET_ID, SignalStore
+from memento.synthetic_api import create_app
+from memento.mcp_signal_store import SIGNAL_SET_ID, SignalStore
 
 
 def preflight(data_root: Path, signal_set_id: str | None = None) -> dict:

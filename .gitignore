@@ -32,6 +32,8 @@ web/coverage/
 web/playwright-report/
 web/test-results/
 web/*.tsbuildinfo
+.playwright-cli/
+output/playwright/
 web/AGENTS.md
 web/CLAUDE.md
 
@@ -40,7 +42,5 @@ web/CLAUDE.md
 .idea/
 .vscode/
 
-# Frozen synthetic hosting bundle and local Vercel linkage
 web/.demo/
-.vercel/
 web/.vercel/

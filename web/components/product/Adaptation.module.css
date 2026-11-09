@@ -1,0 +1,183 @@
+/* Only live-data adaptations. Shell, editorial layout, and Attention styling come from the original demo unchanged. */
+.disclosure {
+  flex: none;
+  margin-top: 14px;
+  font-size: 11.5px;
+  color: #8e8e93;
+  line-height: 18px;
+}
+.disclosure summary {
+  cursor: pointer;
+  width: fit-content;
+}
+.disclosure p {
+  margin-top: 8px;
+  max-width: 760px;
+}
+.disclosure a {
+  display: inline-block;
+  margin-top: 8px;
+}
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.filters button {
+  font-size: 11px;
+  border: 1px solid #e5e5ea;
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+.filters button[aria-pressed="true"] {
+  background: #e8e8ed;
+}
+.listBody {
+  max-height: 350px;
+}
+.listPager {
+  height: 16px;
+  width: 16px;
+}
+.page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.deep {
+  overflow-y: auto;
+  gap: 6px;
+}
+.investigationHeader {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #fff;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #ececef;
+}
+.stage {
+  min-height: 300px;
+}
+.detail {
+  margin-top: 12px;
+  overflow-y: auto;
+  min-height: 0;
+}
+.readout {
+  font-size: 12px;
+  color: #6e6e73;
+  line-height: 18px;
+}
+.report {
+  flex: none;
+  margin: 0;
+  max-width: none;
+}
+.viewToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 14px;
+  flex: none;
+}
+.viewToggle button {
+  border: 1px solid #e5e5ea;
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 12px;
+}
+.viewToggle button[aria-pressed="true"] {
+  color: #0a4fb0;
+  background: #eef6ff;
+  border-color: #0a7aff;
+}
+.viewToggle > span {
+  color: #8e8e93;
+  font-size: 11px;
+  margin-left: 8px;
+}
+.feed {
+  overflow-y: auto;
+  min-height: 0;
+  max-width: 1000px;
+  padding-right: 6px;
+}
+.feedCard {
+  border: 1px solid #e5e5ea;
+  border-left: 3px solid #0a7aff;
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 12px;
+}
+.feedSelected {
+  border-left-color: #ff9500;
+  background: #fffbf5;
+}
+.feedHeading {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.feedHeading h2 {
+  font-size: 15px;
+  font-weight: 600;
+  flex: 1;
+}
+.feedHeading h2 span {
+  color: #6e6e73;
+  font-weight: 400;
+}
+.feedHeading > span:last-child {
+  font-size: 12px;
+  color: #6e6e73;
+}
+.feedRank {
+  color: #0a4fb0;
+  font-size: 13px;
+}
+.impact {
+  color: #1d1d1f;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 21px;
+  margin: 8px 0;
+}
+.feedFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0 6px;
+  font-size: 12px;
+  color: #6e6e73;
+}
+@media (max-width: 700px) {
+  .feedHeading,
+  .feedFooter {
+    flex-wrap: wrap;
+  }
+  .viewToggle > span {
+    display: none;
+  }
+  .feed {
+    overflow: visible;
+  }
+}
+@media (max-width: 700px) {
+  .page {
+    overflow-y: auto;
+  }
+  .stage {
+    min-height: 250px;
+  }
+  .listBody {
+    max-height: none;
+  }
+}

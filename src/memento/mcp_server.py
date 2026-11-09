@@ -20,11 +20,11 @@ from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import BaseModel, Field
 from starlette.responses import JSONResponse
 
-from .api import read_monday_report, read_signal_detail, read_signal_queue
+from .mcp_signal_reader import read_monday_report, read_signal_detail, read_signal_queue
 from .mcp_catalog import LIMITATIONS, METRICS, MODEL
 from .mcp_security import ECONOMICS_SCOPE, READ_SCOPE, MCPTokenVerifier
 from .security import SecurityPolicy
-from .serving import SIGNAL_SET_ID, SignalStore
+from .mcp_signal_store import SIGNAL_SET_ID, SignalStore
 
 PublicationID = Annotated[str, Field(pattern=r"^mss_[0-9a-f]{64}$")]
 SignalID = Annotated[str, Field(pattern=r"^sig_[0-9a-f]{64}$")]

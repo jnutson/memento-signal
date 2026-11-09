@@ -1,141 +1,460 @@
 import { z } from "zod";
 
 export const SIGNAL_API_CONTRACT_VERSION = "memento-signal-api-v1" as const;
-export function calibrationNotice(status: string | null | undefined): string | null {
+export function calibrationNotice(
+  status: string | null | undefined,
+): string | null {
   if (!status) return null;
-  if (status === "engineering_only_sales_scale_validated_lead_times_assumed") return "Engineering slice: annual retail-sales scale is validated. Lead times and replenishment remain illustrative assumptions, not calibrated operational estimates.";
-  if (status === "engineering_only_parent_economics_miscalibrated") return "Engineering slice: parent sales and inventory retain a known calibration defect. Economic amounts are not calibrated business estimates.";
+  if (status === "engineering_only_sales_scale_validated_lead_times_assumed")
+    return "Engineering slice: annual retail-sales scale is validated. Lead times and replenishment remain illustrative assumptions, not calibrated operational estimates.";
+  if (status === "engineering_only_parent_economics_miscalibrated")
+    return "Engineering slice: parent sales and inventory retain a known calibration defect. Economic amounts are not calibrated business estimates.";
   return "Engineering slice: calibration is not verified for commercial or operational decisions.";
 }
-const decimal = z.string().regex(/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/).refine((value) => Number.isFinite(Number(value)), "Decimal must be finite");
+const decimal = z.string().regex(/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/);
 const money = decimal.nullable();
-const score = decimal.refine((value) => Number(value) >= 0 && Number(value) <= 1);
-const signalType = z.enum(["availability", "demand_momentum", "inventory_imbalance"]);
-const identity = z.strictObject({ item_name: z.string(), company_item_id: z.string(), source_product_id: z.string(), store_name: z.string(), source_location_id: z.string() });
+const score = decimal.refine(
+  (value) => Number(value) >= 0 && Number(value) <= 1,
+);
+const signalType = z.enum([
+  "availability",
+  "demand_momentum",
+  "inventory_imbalance",
+]);
+const identity = z.strictObject({
+  item_name: z.string(),
+  company_item_id: z.string(),
+  source_product_id: z.string(),
+  store_name: z.string(),
+  source_location_id: z.string(),
+});
 
 const signalObjectSchema = z.strictObject({
-  signal_id: z.string().regex(/^sig_[0-9a-f]{64}$/), signal_type: signalType,
+  signal_id: z.string().regex(/^sig_[0-9a-f]{64}$/),
+  signal_type: signalType,
   signal_direction: z.enum(["risk", "acceleration", "deceleration", "excess"]),
-  observation_date: z.iso.date(), store_id: z.string(), product_id: z.string(), identity,
-  headline_metric_name: z.string(), headline_metric_value: decimal,
-  estimated_retail_sales_impact_amount: money, estimated_contribution_impact_amount: money,
-  estimated_cost_impact_amount: money, inventory_cost_exposed_amount: money, carrying_cost_28d_amount: money,
-  economic_impact_basis: z.string(), days_until_material_impact: z.number().int().min(1).max(28),
-  minimum_reaction_days: z.number().int().nonnegative(), action_slack_days: z.number().int(),
-  impact_score: score, reaction_score: score, confidence_score: score, rank_score: score,
-  overall_rank_position: z.number().int().positive(), signal_type_rank_position: z.number().int().positive(),
+  observation_date: z.iso.date(),
+  store_id: z.string(),
+  product_id: z.string(),
+  identity,
+  headline_metric_name: z.string(),
+  headline_metric_value: decimal,
+  estimated_retail_sales_impact_amount: money,
+  estimated_contribution_impact_amount: money,
+  estimated_cost_impact_amount: money,
+  inventory_cost_exposed_amount: money,
+  carrying_cost_28d_amount: money,
+  economic_impact_basis: z.string(),
+  days_until_material_impact: z.number().int().min(1).max(28),
+  minimum_reaction_days: z.number().int().nonnegative(),
+  action_slack_days: z.number().int(),
+  impact_score: score,
+  reaction_score: score,
+  confidence_score: score,
+  rank_score: score,
+  overall_rank_position: z.number().int().positive(),
+  signal_type_rank_position: z.number().int().positive(),
+  urgency_score: score.nullable().optional(),
+  decision_slack_days: z.number().int().nullable().optional(),
+  decision_lead_time_days: z.number().int().nonnegative().nullable().optional(),
+  urgency_basis: z
+    .enum(["assumed_conservative_action", "declared_review_allowance"])
+    .nullable()
+    .optional(),
+  urgency_action: z.string().min(1).nullable().optional(),
 });
 
-function validateSignalFields(value: z.infer<typeof signalObjectSchema>, context: z.RefinementCtx) {
-  const directions = { availability: ["risk"], demand_momentum: ["acceleration", "deceleration"], inventory_imbalance: ["excess"] } as const;
-  if (!(directions[value.signal_type] as readonly string[]).includes(value.signal_direction)) context.addIssue({ code: "custom", path: ["signal_direction"], message: "Direction must match signal type" });
-  const inventoryValues = [value.estimated_cost_impact_amount, value.inventory_cost_exposed_amount, value.carrying_cost_28d_amount];
+function validateSignalFields(
+  value: z.infer<typeof signalObjectSchema>,
+  context: z.RefinementCtx,
+) {
+  const timing = [
+    value.urgency_score,
+    value.decision_slack_days,
+    value.decision_lead_time_days,
+    value.urgency_basis,
+    value.urgency_action,
+  ];
+  if (timing.some((item) => item != null)) {
+    const complete = timing.every((item) => item != null);
+    const expected = Math.max(
+      0,
+      Math.min(1, 1 - (value.decision_slack_days ?? 0) / 28),
+    );
+    if (
+      !complete ||
+      value.decision_slack_days !==
+        value.days_until_material_impact -
+          (value.decision_lead_time_days ?? 0) ||
+      Math.abs(Number(value.urgency_score) - expected) > 0.000001
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["urgency_score"],
+        message: "Urgency must reconcile with complete decision timing",
+      });
+    const priority =
+      0.4 * Number(value.impact_score) +
+      0.4 * Number(value.urgency_score) +
+      0.2 * Number(value.confidence_score);
+    if (Math.abs(Number(value.rank_score) - priority) > 0.000001)
+      context.addIssue({
+        code: "custom",
+        path: ["rank_score"],
+        message: "Priority must reconcile with published weights",
+      });
+  }
+  const directions = {
+    availability: ["risk"],
+    demand_momentum: ["acceleration", "deceleration"],
+    inventory_imbalance: ["excess"],
+  } as const;
+  if (
+    !(directions[value.signal_type] as readonly string[]).includes(
+      value.signal_direction,
+    )
+  )
+    context.addIssue({
+      code: "custom",
+      path: ["signal_direction"],
+      message: "Direction must match signal type",
+    });
+  const inventoryValues = [
+    value.estimated_cost_impact_amount,
+    value.inventory_cost_exposed_amount,
+    value.carrying_cost_28d_amount,
+  ];
   if (value.signal_type === "inventory_imbalance") {
-    if (value.estimated_retail_sales_impact_amount !== null || value.estimated_contribution_impact_amount !== null || inventoryValues.some((item) => item === null)) context.addIssue({ code: "custom", path: [], message: "Inventory economics must match signal type" });
-  } else if (value.estimated_retail_sales_impact_amount === null || value.estimated_contribution_impact_amount === null || inventoryValues.some((item) => item !== null)) context.addIssue({ code: "custom", path: [], message: "Sales economics must match signal type" });
+    if (
+      value.estimated_retail_sales_impact_amount !== null ||
+      value.estimated_contribution_impact_amount !== null ||
+      inventoryValues.some((item) => item === null)
+    )
+      context.addIssue({
+        code: "custom",
+        path: [],
+        message: "Inventory economics must match signal type",
+      });
+  } else if (
+    value.estimated_retail_sales_impact_amount === null ||
+    value.estimated_contribution_impact_amount === null ||
+    inventoryValues.some((item) => item !== null)
+  )
+    context.addIssue({
+      code: "custom",
+      path: [],
+      message: "Sales economics must match signal type",
+    });
 }
 
-export const signalSchema = signalObjectSchema.superRefine(validateSignalFields);
+export const signalSchema =
+  signalObjectSchema.superRefine(validateSignalFields);
 
-export const signalQueueSchema = z.strictObject({
-  api_contract_version: z.literal(SIGNAL_API_CONTRACT_VERSION),
-  run: z.strictObject({
-    signal_set_id: z.string(), signal_as_of: z.iso.datetime({ offset: true }), candidate_count: z.number().int().nonnegative(),
-    display_count: z.number().int().min(0).max(10), candidate_counts_by_type: z.record(signalType, z.number().int().nonnegative()),
-    canonical_dataset_id: z.string(), source_release_set_id: z.string(), source_release_ids: z.array(z.string()),
-    metric_contract_version: z.string(), signal_publication_version: z.string(), ranker_version: z.string(), configuration_hash: z.string(),
-    calibration_status: z.string().nullable().optional(),
-    supply_projection_counts: z.record(z.string(), z.number().int().nonnegative()).nullable().optional(),
-  }),
-  signals: z.array(signalSchema).max(10),
-}).superRefine((value, context) => {
-  if (Object.values(value.run.candidate_counts_by_type).reduce((sum, count) => sum + count, 0) !== value.run.candidate_count) context.addIssue({ code: "custom", path: ["run", "candidate_counts_by_type"], message: "Candidate counts must reconcile" });
-  const ranks = new Set<number>();
-  for (let index = 1; index < value.signals.length; index += 1) {
-    if (value.signals[index].overall_rank_position <= value.signals[index - 1].overall_rank_position) context.addIssue({ code: "custom", path: ["signals", index], message: "Overall ranks must remain ordered" });
-  }
-  value.signals.forEach((signal, index) => { if (ranks.has(signal.overall_rank_position)) context.addIssue({ code: "custom", path: ["signals", index, "overall_rank_position"], message: "Overall ranks must be unique" }); ranks.add(signal.overall_rank_position); });
-});
+export const signalQueueSchema = z
+  .strictObject({
+    api_contract_version: z.literal(SIGNAL_API_CONTRACT_VERSION),
+    run: z.strictObject({
+      signal_set_id: z.string(),
+      signal_as_of: z.iso.datetime({ offset: true }),
+      candidate_count: z.number().int().nonnegative(),
+      display_count: z.number().int().min(0).max(10),
+      candidate_counts_by_type: z.record(
+        signalType,
+        z.number().int().nonnegative(),
+      ),
+      canonical_dataset_id: z.string(),
+      source_release_set_id: z.string(),
+      source_release_ids: z.array(z.string()),
+      metric_contract_version: z.string(),
+      signal_publication_version: z.string(),
+      ranker_version: z.string(),
+      configuration_hash: z.string(),
+      calibration_status: z.string().nullable().optional(),
+      supply_projection_counts: z
+        .record(z.string(), z.number().int().nonnegative())
+        .nullable()
+        .optional(),
+      priority_policy: z.string().nullable().optional(),
+      confidence_policy: z.string().nullable().optional(),
+      source_signal_set_id: z.string().nullable().optional(),
+      ranking_weights: z.record(z.string(), score).nullable().optional(),
+    }),
+    signals: z.array(signalSchema).max(10),
+  })
+  .superRefine((value, context) => {
+    if (
+      value.run.ranker_version === "memento-signal-urgency-ranker-v2" &&
+      value.signals.some((row) => row.urgency_score == null)
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["signals"],
+        message: "Urgency release requires urgency scores",
+      });
+    if (
+      Object.values(value.run.candidate_counts_by_type).reduce(
+        (sum, count) => sum + count,
+        0,
+      ) !== value.run.candidate_count
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["run", "candidate_counts_by_type"],
+        message: "Candidate counts must reconcile",
+      });
+    const ranks = new Set<number>();
+    for (let index = 1; index < value.signals.length; index += 1) {
+      if (
+        value.signals[index].overall_rank_position <=
+        value.signals[index - 1].overall_rank_position
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["signals", index],
+          message: "Overall ranks must remain ordered",
+        });
+    }
+    value.signals.forEach((signal, index) => {
+      if (ranks.has(signal.overall_rank_position))
+        context.addIssue({
+          code: "custom",
+          path: ["signals", index, "overall_rank_position"],
+          message: "Overall ranks must be unique",
+        });
+      ranks.add(signal.overall_rank_position);
+    });
+  });
 
 const evidence = z.strictObject({
-  signal_id: z.string().regex(/^sig_[0-9a-f]{64}$/), evidence_type: z.enum(["historical_week", "forward_demand", "inventory_projection"]),
-  evidence_date: z.iso.date(), path: z.enum(["low", "base", "high"]).nullable(), actual_units: money,
-  retailer_forecast_units: money, adjusted_forecast_units: money, demand_units: money,
-  scheduled_inbound_units: money, opening_units: money, ending_units: money, lost_units: money, target_units: money,
+  signal_id: z.string().regex(/^sig_[0-9a-f]{64}$/),
+  evidence_type: z.enum([
+    "historical_week",
+    "forward_demand",
+    "inventory_projection",
+  ]),
+  evidence_date: z.iso.date(),
+  path: z.enum(["low", "base", "high"]).nullable(),
+  actual_units: money,
+  retailer_forecast_units: money,
+  adjusted_forecast_units: money,
+  demand_units: money,
+  scheduled_inbound_units: money,
+  opening_units: money,
+  ending_units: money,
+  lost_units: money,
+  target_units: money,
 });
 
-const arrival = z.strictObject({ order_state: z.enum(["open", "in_transit", "planned"]).default("planned"), quantity: z.number().nonnegative(), basis: z.string(), early: z.iso.date().nullable(), typical: z.iso.date().nullable(), conservative: z.iso.date().nullable(), stages: z.array(z.string()) });
-const supplyContext = z.strictObject({
-  assumption_version: z.string(), classification: z.literal("synthetic_assumption"), calibration: z.string(), route: z.string(), category: z.string(),
-  arrivals: z.array(arrival), planned_replenishment: z.array(arrival.extend({ planned_order_date: z.iso.date(), stages: z.array(z.string()).default([]) })),
-  supply_timing: z.record(z.enum(["committed", "early", "typical", "conservative"]), z.strictObject({ first_oos_date: z.iso.date().nullable(), lost_units: z.number().nonnegative() })),
-  planning_prerequisites: z.array(z.string()),
-  actions: z.array(z.strictObject({ action: z.string(), early_days: z.number().int().nonnegative(), typical_days: z.number().int().nonnegative(), conservative_days: z.number().int().nonnegative(), typical_slack: z.number().int(), conservative_slack: z.number().int(), timing: z.enum(["robust", "conditional", "too_late"]), feasibility: z.enum(["robust", "conditional", "too_late", "unknown", "not_applicable"]), missing_prerequisites: z.array(z.string()), score: z.number().min(0).max(1), stages: z.array(z.string()) })),
-  legacy_reaction_score: score, legacy_reaction_days: z.number().int().nonnegative(), legacy_availability_present: z.boolean(), ranking_policy: z.string(),
-  committed_overall_rank: z.number().int().positive().nullable().optional(), committed_rank_score: score.nullable().optional(),
-}).superRefine((value, context) => {
-  for (const row of [...value.arrivals, ...value.planned_replenishment]) {
-    const dates = [row.early, row.typical, row.conservative];
-    if (!(dates.every((day) => day === null) || dates.every((day) => day !== null) && row.early! <= row.typical! && row.typical! <= row.conservative!)) context.addIssue({ code: "custom", path: ["arrivals"], message: "Arrival ranges must be complete and ordered" });
-  }
-  for (const plan of value.planned_replenishment) {
-    if (plan.early === null || plan.typical === null || plan.conservative === null || plan.planned_order_date > plan.early) context.addIssue({ code: "custom", path: ["planned_replenishment"], message: "Planned receipt dates must follow order date" });
-  }
-  for (const action of value.actions) {
-    if (!(action.early_days <= action.typical_days && action.typical_days <= action.conservative_days) || action.missing_prerequisites.length > 0 && action.score !== 0 || ["unknown", "not_applicable", "too_late"].includes(action.feasibility) && action.score !== 0) context.addIssue({ code: "custom", path: ["actions"], message: "Action timing and prerequisites must reconcile" });
-  }
+const arrival = z.strictObject({
+  order_state: z.enum(["open", "in_transit", "planned"]).default("planned"),
+  quantity: z.number().nonnegative(),
+  basis: z.string(),
+  early: z.iso.date().nullable(),
+  typical: z.iso.date().nullable(),
+  conservative: z.iso.date().nullable(),
+  stages: z.array(z.string()),
 });
+const supplyContext = z
+  .strictObject({
+    assumption_version: z.string(),
+    classification: z.literal("synthetic_assumption"),
+    calibration: z.string(),
+    route: z.string(),
+    category: z.string(),
+    arrivals: z.array(arrival),
+    planned_replenishment: z.array(
+      arrival.extend({
+        planned_order_date: z.iso.date(),
+        stages: z.array(z.string()).default([]),
+      }),
+    ),
+    supply_timing: z.record(
+      z.enum(["committed", "early", "typical", "conservative"]),
+      z.strictObject({
+        first_oos_date: z.iso.date().nullable(),
+        lost_units: z.number().nonnegative(),
+      }),
+    ),
+    planning_prerequisites: z.array(z.string()),
+    actions: z.array(
+      z.strictObject({
+        action: z.string(),
+        early_days: z.number().int().nonnegative(),
+        typical_days: z.number().int().nonnegative(),
+        conservative_days: z.number().int().nonnegative(),
+        typical_slack: z.number().int(),
+        conservative_slack: z.number().int(),
+        timing: z.enum(["robust", "conditional", "too_late"]),
+        feasibility: z.enum([
+          "robust",
+          "conditional",
+          "too_late",
+          "unknown",
+          "not_applicable",
+        ]),
+        missing_prerequisites: z.array(z.string()),
+        score: z.number().min(0).max(1),
+        stages: z.array(z.string()),
+      }),
+    ),
+    baseline_reaction_score: score,
+    baseline_reaction_days: z.number().int().nonnegative(),
+    baseline_availability_present: z.boolean(),
+    ranking_policy: z.string(),
+    committed_overall_rank: z.number().int().positive().nullable().optional(),
+    committed_rank_score: score.nullable().optional(),
+  })
+  .superRefine((value, context) => {
+    for (const row of [...value.arrivals, ...value.planned_replenishment]) {
+      const dates = [row.early, row.typical, row.conservative];
+      if (
+        !(
+          dates.every((day) => day === null) ||
+          (dates.every((day) => day !== null) &&
+            row.early! <= row.typical! &&
+            row.typical! <= row.conservative!)
+        )
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["arrivals"],
+          message: "Arrival ranges must be complete and ordered",
+        });
+    }
+    for (const plan of value.planned_replenishment) {
+      if (
+        plan.early === null ||
+        plan.typical === null ||
+        plan.conservative === null ||
+        plan.planned_order_date > plan.early
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["planned_replenishment"],
+          message: "Planned receipt dates must follow order date",
+        });
+    }
+    for (const action of value.actions) {
+      if (
+        !(
+          action.early_days <= action.typical_days &&
+          action.typical_days <= action.conservative_days
+        ) ||
+        (action.missing_prerequisites.length > 0 && action.score !== 0) ||
+        (["unknown", "not_applicable", "too_late"].includes(
+          action.feasibility,
+        ) &&
+          action.score !== 0)
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["actions"],
+          message: "Action timing and prerequisites must reconcile",
+        });
+    }
+  });
 
-export const signalDetailSchema = z.strictObject({
-  api_contract_version: z.literal(SIGNAL_API_CONTRACT_VERSION),
-  signal: signalObjectSchema.extend({ signal_as_of: z.iso.datetime({ offset: true }), company_id: z.string(), brand_id: z.string(), forecast_quality: score, data_completeness: score, stability_score: score, source_release_ids: z.array(z.string()), source_release_set_id: z.string(), canonical_dataset_id: z.string(), metric_contract_version: z.string(), signal_publication_version: z.string(), ranker_version: z.string(), configuration_hash: z.string() }).superRefine(validateSignalFields),
-  evidence: z.array(evidence),
-  supply_context: supplyContext.nullable().optional(),
-  projected_depletion_date: z.iso.date().nullable().optional(),
-}).superRefine((value, context) => {
-  if (value.evidence.some((row) => row.signal_id !== value.signal.signal_id)) context.addIssue({ code: "custom", path: ["evidence"], message: "Evidence identity must match signal" });
-  const observation = new Date(`${value.signal.observation_date}T00:00:00Z`);
-  const expectedDates = Array.from({ length: 28 }, (_, i) => new Date(observation.getTime() + (i + 1) * 86400000).toISOString().slice(0, 10));
-  const completeHorizon = (rows: z.infer<typeof evidence>[]) => rows.length === 28 && new Set(rows.map((row) => row.evidence_date)).size === 28 && rows.every((row) => expectedDates.includes(row.evidence_date));
-  const issue = (message: string) => context.addIssue({ code: "custom", path: ["evidence"], message });
-  if (value.evidence.some((row) => [row.actual_units, row.retailer_forecast_units, row.adjusted_forecast_units, row.demand_units, row.scheduled_inbound_units, row.opening_units, row.ending_units, row.lost_units, row.target_units].some((v) => v !== null && Number(v) < 0))) issue("Evidence units must be nonnegative");
-  if (value.signal.signal_type === "demand_momentum") {
-    const historical = value.evidence.filter((row) => row.evidence_type === "historical_week" && row.path === null);
-    const forward = value.evidence.filter((row) => row.evidence_type === "forward_demand" && row.path === "base");
-    if (new Set(historical.map((row) => row.evidence_date)).size !== 8 || historical.some((row) => row.evidence_date >= value.signal.observation_date || row.actual_units === null || row.retailer_forecast_units === null) || !completeHorizon(forward) || forward.some((row) => row.retailer_forecast_units === null || row.adjusted_forecast_units === null)) issue("Demand evidence dates and values must be complete");
-    if (value.evidence.length !== 36 || historical.length !== 8 || forward.length !== 28) context.addIssue({ code: "custom", path: ["evidence"], message: "Demand evidence must contain eight historical weeks and 28 forward days" });
-    return;
-  }
-  for (const path of ["low", "base", "high"]) {
-    const rows = value.evidence.filter((row) => row.path === path && row.evidence_type === "inventory_projection");
-    if (!completeHorizon(rows) || rows.some((row) => row.opening_units === null || row.ending_units === null || row.demand_units === null || row.lost_units === null || row.scheduled_inbound_units === null)) issue("Inventory evidence dates and values must be complete");
-  }
-  const counts = { low: 0, base: 0, high: 0 };
-  for (const row of value.evidence) if (row.evidence_type === "inventory_projection" && row.path !== null) counts[row.path] += 1;
-  if (value.evidence.length !== 84 || Object.values(counts).some((count) => count !== 28)) context.addIssue({ code: "custom", path: ["evidence"], message: "Inventory evidence must contain three complete paths" });
-  if (value.signal.signal_type === "availability" && value.evidence.some((row) => row.target_units !== null)) context.addIssue({ code: "custom", path: ["evidence"], message: "Availability evidence cannot contain target units" });
-  if (value.signal.signal_type === "inventory_imbalance" && value.evidence.some((row) => row.target_units === null)) context.addIssue({ code: "custom", path: ["evidence"], message: "Inventory imbalance evidence requires target units" });
-});
+export const signalDetailSchema = z
+  .strictObject({
+    api_contract_version: z.literal(SIGNAL_API_CONTRACT_VERSION),
+    signal: signalObjectSchema
+      .extend({
+        signal_as_of: z.iso.datetime({ offset: true }),
+        company_id: z.string(),
+        brand_id: z.string(),
+        forecast_quality: score,
+        data_completeness: score,
+        stability_score: score,
+        source_release_ids: z.array(z.string()),
+        source_release_set_id: z.string(),
+        canonical_dataset_id: z.string(),
+        metric_contract_version: z.string(),
+        signal_publication_version: z.string(),
+        ranker_version: z.string(),
+        configuration_hash: z.string(),
+      })
+      .superRefine(validateSignalFields),
+    evidence: z.array(evidence),
+    supply_context: supplyContext.nullable().optional(),
+  })
+  .superRefine((value, context) => {
+    if (value.signal.ranker_version === "memento-signal-urgency-ranker-v2") {
+      const signal = value.signal;
+      const expected =
+        Number(signal.forecast_quality) *
+        Number(signal.data_completeness) *
+        Number(signal.stability_score);
+      if (
+        signal.urgency_score == null ||
+        Math.abs(Number(signal.confidence_score) - expected) > 0.000001
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["signal"],
+          message:
+            "Urgency and multiplicative confidence must match the new publication",
+        });
+    }
+    if (value.evidence.some((row) => row.signal_id !== value.signal.signal_id))
+      context.addIssue({
+        code: "custom",
+        path: ["evidence"],
+        message: "Evidence identity must match signal",
+      });
+    if (value.signal.signal_type === "demand_momentum") {
+      const historical = value.evidence.filter(
+        (row) => row.evidence_type === "historical_week" && row.path === null,
+      );
+      const forward = value.evidence.filter(
+        (row) => row.evidence_type === "forward_demand" && row.path === "base",
+      );
+      if (
+        value.evidence.length !== 36 ||
+        historical.length !== 8 ||
+        forward.length !== 28
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["evidence"],
+          message:
+            "Demand evidence must contain eight historical weeks and 28 forward days",
+        });
+      return;
+    }
+    const counts = { low: 0, base: 0, high: 0 };
+    for (const row of value.evidence)
+      if (row.evidence_type === "inventory_projection" && row.path !== null)
+        counts[row.path] += 1;
+    if (
+      value.evidence.length !== 84 ||
+      Object.values(counts).some((count) => count !== 28)
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["evidence"],
+        message: "Inventory evidence must contain three complete paths",
+      });
+    if (
+      value.signal.signal_type === "availability" &&
+      value.evidence.some((row) => row.target_units !== null)
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["evidence"],
+        message: "Availability evidence cannot contain target units",
+      });
+    if (
+      value.signal.signal_type === "inventory_imbalance" &&
+      value.evidence.some((row) => row.target_units === null)
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["evidence"],
+        message: "Inventory imbalance evidence requires target units",
+      });
+  });
 
 export type SignalQueue = z.infer<typeof signalQueueSchema>;
 export type SignalRow = z.infer<typeof signalSchema>;
 export type SignalDetail = z.infer<typeof signalDetailSchema>;
 export type SignalType = z.infer<typeof signalType>;
-
-export const mondayReportSchema = z.strictObject({
-  api_contract_version: z.literal(SIGNAL_API_CONTRACT_VERSION),
-  run: signalQueueSchema.shape.run,
-  scope: z.strictObject({ classification: z.enum(["synthetic", "internal", "confidential_customer"]), observed_from: z.iso.date(), observed_through: z.iso.date(), horizon_from: z.iso.date(), horizon_through: z.iso.date(), item_count: z.number().int().positive(), store_count: z.number().int().positive() }),
-  categories: z.array(z.strictObject({ signal_type: signalType, signal_direction: z.literal("acceleration").nullable(), candidate_count: z.number().int().nonnegative(), leading_signal: signalSchema.nullable() })).length(3),
-}).superRefine((value, context) => {
-  const expected = ["availability", "inventory_imbalance", "demand_momentum"];
-  value.categories.forEach((card, index) => {
-    if (card.signal_type !== expected[index] || card.signal_direction !== (card.signal_type === "demand_momentum" ? "acceleration" : null) ||
-        (card.candidate_count === 0) !== (card.leading_signal === null) ||
-        card.leading_signal && (card.leading_signal.signal_type !== card.signal_type || card.signal_direction && card.leading_signal.signal_direction !== card.signal_direction)) context.addIssue({ code: "custom", path: ["categories", index], message: "Report selection and leader must agree" });
-    const total = value.run.candidate_counts_by_type[card.signal_type];
-    if (card.candidate_count > total || card.signal_type !== "demand_momentum" && card.candidate_count !== total) context.addIssue({ code: "custom", path: ["categories", index], message: "Report count must match its selection" });
-  });
-  if (value.scope.observed_from > value.scope.observed_through || value.scope.horizon_from > value.scope.horizon_through) context.addIssue({ code: "custom", path: ["scope"], message: "Report dates must be ordered" });
-});
-export type MondayReport = z.infer<typeof mondayReportSchema>;

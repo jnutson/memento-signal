@@ -13,7 +13,8 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 
-import httpx
+import urllib.request
+import urllib.error
 import jwt
 from jwt.algorithms import RSAAlgorithm
 from cryptography import x509
@@ -24,7 +25,7 @@ from cryptography.x509.oid import NameOID
 from memento.manifest import sha256_file
 from memento.orchestrator import ingest
 from memento.signals import run_signals
-from tools.synthetic_demo import build_attention_release_set
+from tests.core_fixture import core_fixture
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -36,16 +37,21 @@ def port() -> int:
 
 
 def wait_for(url: str, process: subprocess.Popen, *, verify: bool | ssl.SSLContext = True):
-    with httpx.Client(verify=verify, trust_env=False) as client:
-        for _ in range(180):
-            if process.poll() is not None:
-                raise RuntimeError("synthetic verification service exited")
-            try:
-                if client.get(url, timeout=2).status_code < 500:
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}),
+                                        urllib.request.HTTPSHandler(context=verify if isinstance(verify, ssl.SSLContext) else None))
+    for _ in range(180):
+        if process.poll() is not None:
+            raise RuntimeError("synthetic verification service exited")
+        try:
+            with opener.open(url, timeout=2) as response:
+                if response.status < 500:
                     return
-            except httpx.HTTPError:
-                pass
-            time.sleep(0.25)
+        except urllib.error.HTTPError as exc:
+            if exc.code < 500:
+                return
+        except (urllib.error.URLError, OSError):
+            pass
+        time.sleep(0.25)
     raise RuntimeError("synthetic verification service did not become ready")
 
 
@@ -54,13 +60,11 @@ def verify() -> None:
     web = None
     with tempfile.TemporaryDirectory(prefix="memento-security-browser-") as temporary:
         directory = Path(temporary).resolve()
-        source = build_attention_release_set(directory / "source", demo=True)
         data = directory / "customer-a"
-        canonical = ingest(source, data_root=data, classification="synthetic", tenant_id="customer-a")
-        publication = run_signals(canonical, data_root=data, annual_carrying_cost_rate=Decimal("0.20"),
-                                  carrying_rate_version="synthetic-security-browser-v1")
+        publication = core_fixture(data, products=2, tenant_id="customer-a")
+        other = core_fixture(directory / "customer-b", products=3, tenant_id="customer-b")
         manifests = {p.relative_to(data).as_posix(): sha256_file(p)
-                     for category in ("canonical", "signals", "predictions")
+                     for category in ("canonical", "metrics")
                      for p in (data / category).glob("*/manifest.json")}
         policy = directory / "policy.json"
         issuer, audience = "https://synthetic-test.cloudflareaccess.com", "synthetic-audience-0001"
@@ -94,12 +98,11 @@ def verify() -> None:
                                             "jwks": {"keys": [jwk]}, "tls_key": str(key_path), "tls_cert": str(cert_path)}))
         test_info = directory / "browser.json"
         test_info.write_text(json.dumps({"token": token("user-a"), "other_token": token("user-b"),
-                                        "policy": str(policy), "publication": publication.name}))
+                                        "policy": str(policy), "publication": publication.name, "other_publication": other.name}))
         test_info.chmod(0o600)
         env = {**os.environ, "PYTHONPATH": str(ROOT), "MEMENTO_SERVING_MODE": "cloudflare",
                "MEMENTO_API_ORIGIN": f"https://localhost:{api_port}", "MEMENTO_CUSTOMER_PATH": "/craftmix",
                "MEMENTO_DEMO_BUNDLE": "0", "NODE_EXTRA_CA_CERTS": str(cert_path),
-               "MEMENTO_SECURITY_VERIFY": "1",
                "SECURITY_BASE_URL": f"http://127.0.0.1:{web_port}", "SECURITY_FIXTURE_INFO": str(test_info)}
         with (directory / "services.log").open("w") as log:
             originals = {path: path.read_bytes() for path in (ROOT / "web/next-env.d.ts", ROOT / "web/tsconfig.json")}
@@ -112,7 +115,7 @@ def verify() -> None:
                                        cwd=ROOT / "web", env=env, stdout=log, stderr=log,
                                        start_new_session=True)
                 processes.append(web)
-                wait_for(f"http://127.0.0.1:{web_port}/craftmix/report", web)
+                wait_for(f"http://127.0.0.1:{web_port}/craftmix/weekly", web)
                 subprocess.run(["npx", "playwright", "test", "--config", "playwright.security.config.ts"],
                                cwd=ROOT / "web", env=env, check=True)
             finally:

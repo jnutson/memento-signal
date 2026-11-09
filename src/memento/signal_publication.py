@@ -10,10 +10,10 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from .ownership import require_owner
 from .manifest import canonical_json, sha256_file
 from .models import IngestionFailure, ValidationResult
-from .signal_contract import EVIDENCE_SCHEMA, SIGNAL_CONTRACT_VERSION, SIGNAL_PUBLICATION_VERSION, SIGNAL_RANKER_VERSION, SIGNAL_SCHEMA, SIGNAL_TYPE_ORDER
+from .ownership import require_owner
+from .signal_contract import EVIDENCE_SCHEMA, SIGNAL_CONTRACT_VERSION, SIGNAL_PUBLICATION_VERSION, SIGNAL_RANKER_VERSION, SIGNAL_SCHEMA, SIGNAL_TYPE_ORDER, PRIORITY_SCHEMA, URGENCY_POLICY_VERSION, URGENCY_RANKER_VERSION
 
 
 def publish_signal_set(
@@ -26,9 +26,12 @@ def publish_signal_set(
     config_hash = hashlib.sha256(canonical_json(configuration)).hexdigest()
     metric_version = "memento-signal-metrics-v1.1.0" if supply_context is not None else SIGNAL_CONTRACT_VERSION
     ranker_version = "memento-signal-actionability-ranker-v1" if supply_context is not None else SIGNAL_RANKER_VERSION
+    urgency_policy = configuration.get("priority_policy") == URGENCY_POLICY_VERSION
+    if urgency_policy:
+        metric_version, ranker_version = "memento-signal-metrics-v1.2.0", URGENCY_RANKER_VERSION
     identity = {
         "canonical_dataset_id": canonical_manifest["dataset_id"],
-        **({"tenant_id": canonical_manifest["tenant_id"]} if "tenant_id" in canonical_manifest else {}),
+        **({"tenant_id": canonical_manifest["tenant_id"]} if canonical_manifest.get("tenant_id") else {}),
         "source_manifest_hashes": canonical_manifest.get("source_manifests", {}),
         "signal_as_of": canonical_manifest["as_of"], "metric_contract_version": metric_version,
         "signal_publication_version": SIGNAL_PUBLICATION_VERSION, "ranker_version": ranker_version,
@@ -61,15 +64,17 @@ def publish_signal_set(
     required_rank_fields = {"impact_score", "rank_score", "signal_type_rank_position", "overall_rank_position", "is_overall_top_10"}
     if any(not required_rank_fields <= row.keys() for row in candidates):
         raise ValueError("signal publication requires pre-ranked candidates")
+    if urgency_policy and any(row.get("urgency_score") is None or row.get("decision_slack_days") is None for row in candidates):
+        raise ValueError("urgency publication requires decision timing")
     for row in candidates:
         row.update(metric_contract_version=metric_version, signal_publication_version=SIGNAL_PUBLICATION_VERSION, ranker_version=ranker_version, configuration_hash=config_hash)
     stage = data_root.resolve() / "staging" / ("run_" + uuid.uuid4().hex) / "signals"
     try:
         stage.mkdir(parents=True)
         files = []
-        tables = [("signal.parquet", candidates, SIGNAL_SCHEMA), ("signal_evidence.parquet", evidence, EVIDENCE_SCHEMA)]
+        tables = [("signal.parquet", candidates, PRIORITY_SCHEMA if urgency_policy else SIGNAL_SCHEMA), ("signal_evidence.parquet", evidence, EVIDENCE_SCHEMA)]
         if supply_context is not None:
-            tables.append(("supply_context.parquet", supply_context, pa.schema([("signal_id", pa.string()), ("context", pa.string())])))
+            tables.append(("supply_context.parquet", [dict(row) for row in supply_context], pa.schema([("signal_id", pa.string()), ("context", pa.string())])))
         for name, rows, schema in tables:
             target = stage / name
             table = pa.Table.from_pylist(rows, schema=schema)

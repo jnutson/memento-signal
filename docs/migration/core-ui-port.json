@@ -1,0 +1,41 @@
+{
+  "source_repository": "jnutson/memento-demo-ecosystem",
+  "source_commit": "110081f0220beabedf64500941c0a8898d0080cb",
+  "target_baseline": "f9cd045",
+  "files": [
+    {
+      "source": "apps/web/components/reporting-v2/Controls.tsx",
+      "destination": "web/components/core/Controls.tsx",
+      "source_sha256": "17bf49097c390348211db4e0e131ca29bcdb97cf1749eb3cd54023d55827fe56",
+      "import_sha256": "17bf49097c390348211db4e0e131ca29bcdb97cf1749eb3cd54023d55827fe56"
+    },
+    {
+      "source": "apps/web/components/reporting-v2/Controls.module.css",
+      "destination": "web/components/core/Controls.module.css",
+      "source_sha256": "0442c411d04858194b3ed25fa874a1b5534160e63c4c960f18d680335dc2df13",
+      "import_sha256": "0442c411d04858194b3ed25fa874a1b5534160e63c4c960f18d680335dc2df13"
+    },
+    {
+      "source": "apps/web/components/reporting-v2/IconButton.tsx",
+      "destination": "web/components/core/IconButton.tsx",
+      "source_sha256": "0b63ad6ce4fd731234b02ec632017a51c5de3d711e6f5be0477a6aa54a1d1784",
+      "import_sha256": "0b63ad6ce4fd731234b02ec632017a51c5de3d711e6f5be0477a6aa54a1d1784"
+    },
+    {
+      "source": "apps/web/components/reporting-v2/IconButton.module.css",
+      "destination": "web/components/core/IconButton.module.css",
+      "source_sha256": "b71761a004db447a82e4d9724e54e1ebe744ad114cb98b544c75be2061dca002",
+      "import_sha256": "b71761a004db447a82e4d9724e54e1ebe744ad114cb98b544c75be2061dca002"
+    }
+  ],
+  "excluded": [
+    "publications",
+    "data",
+    "credentials",
+    "environments",
+    "dependencies",
+    "build output",
+    "showcase calendars",
+    "evaluator artifacts"
+  ]
+}

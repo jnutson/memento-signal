@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from mcp.client import Client
 from mcp.client.stdio import StdioServerParameters
 
-from memento.api import create_app
+from memento.synthetic_api import create_app
 from memento.manifest import sha256_file
 from memento.mcp_security import MCPTokenVerifier
 from memento.mcp_server import SENSITIVE_METRICS, create_http_app, create_server
@@ -213,7 +213,7 @@ def test_sensitive_arguments_are_not_echoed_and_unknown_fields_fail(oauth, caplo
 
 
 def test_publication_stays_pinned_when_current_changes(tmp_path):
-    from memento.serving import SignalStore
+    from memento.mcp_signal_store import SignalStore
     from memento.signal_publication import publish_signal_set
 
     root = tmp_path / "synthetic"
@@ -269,3 +269,46 @@ def test_policy_rejects_non_synthetic_or_insecure_identity(oauth):
         path.write_text(json.dumps({**policy, **changes}))
         with pytest.raises(ValueError, match="policy is missing or invalid"):
             verifier.policy()
+
+
+def test_synthetic_harness_is_loopback_only_and_not_the_customer_app(demo):
+    from memento.api import create_app as customer_app
+    from memento.security import ServingSecurity
+
+    root, _ = demo
+    with TestClient(create_app(root), client=("192.0.2.1", 1234)) as remote:
+        assert remote.get("/v1/signals/report").status_code == 403
+    with TestClient(customer_app(root, security=ServingSecurity("disabled"))) as customer:
+        assert customer.get("/v1/signals/report").status_code == 503
+
+
+def test_synthetic_harness_rejects_non_synthetic_publications(tmp_path):
+    root = tmp_path / "synthetic"
+    publication = prepare_fixture(root)["signal_set_id"]
+    from memento.mcp_signal_store import SignalStore
+    manifest = SignalStore(root / "signals", root / "canonical", publication).run()
+    path = root / "canonical" / manifest["canonical_dataset_id"] / "manifest.json"
+    canonical = json.loads(path.read_text())
+    canonical["source_classification"] = "confidential_customer"
+    path.write_text(json.dumps(canonical))
+    with TestClient(create_app(root)) as client:
+        assert client.get("/v1/signals/report").status_code == 503
+    from memento.api import ApiProblem
+    with pytest.raises(ApiProblem, match="integrity validation"):
+        create_server(root)
+
+
+def test_signal_publication_rejects_cross_customer_output(owned):
+    from memento.mcp_signal_store import SignalStore
+    from memento.signal_publication import publish_signal_set
+
+    root, publication = owned["tenant-a"]
+    other_root, _ = owned["tenant-b"]
+    store = SignalStore(root / "signals", root / "canonical", publication)
+    canonical = store.canonical_release()[1]
+    pointer = other_root / "signals" / "current.json"
+    before = pointer.read_bytes()
+    with pytest.raises(ValueError, match="owner"):
+        publish_signal_set([], [], canonical_manifest=canonical, data_root=other_root,
+                           configuration={"test": "wrong-output-owner"})
+    assert pointer.read_bytes() == before

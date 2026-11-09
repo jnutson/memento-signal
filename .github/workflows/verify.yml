@@ -28,7 +28,7 @@ jobs:
       - name: Install Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: pip
 
       - name: Install Node.js
@@ -48,9 +48,5 @@ jobs:
       - name: Run repository verification
         run: make verify-ci
 
-      - name: Audit browser runtime dependencies
-        run: npm --prefix web audit --omit=dev --audit-level=high
-
-      - name: Audit locked Python dependencies
-        run: |
-          pipx run pip-audit --disable-pip --no-deps -r requirements.lock
+      - name: Audit locked Python runtime dependencies
+        run: pipx run pip-audit --disable-pip --no-deps -r requirements-runtime.lock

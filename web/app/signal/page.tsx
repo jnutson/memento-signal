@@ -1,3 +1,11 @@
-import SignalView from "@/components/signal/SignalView";
+import { Suspense } from "react";
+import Reimagined from "@/components/signal/reimagined/Reimagined";
 
-export default function SignalPage() { return <SignalView />; }
+export const metadata = { title: "Memento Loop · Connected evidence" };
+export default function SignalPage() {
+  return (
+    <Suspense fallback={<p role="status">Loading connected demo…</p>}>
+      <Reimagined defaultRelease={process.env.MEMENTO_DEMO_RELEASE_ID} />
+    </Suspense>
+  );
+}

@@ -2,7 +2,14 @@
 
 This release provides five read-only tools on a frozen synthetic publication.
 It uses the official Python MCP SDK, supports stdio and authenticated Streamable
-HTTP, and shares the website's validated report/queue/evidence readers.
+HTTP. It uses shared Signal response contracts and validators through a dedicated
+synthetic reader. The Craftmix dashboard keeps its newer metric-serving API and
+customer authorization boundary; MCP does not add routes to that API.
+
+After the November 9 merge reconciliation, local demo HTTP tests use
+`memento.synthetic_api`, which accepts loopback clients and synthetic publications
+only. `memento.api` remains the default-disabled customer application. MCP HTTP
+still requires its separate OAuth policy; the test harness is not its ingress.
 Production customer-data serving is deliberately not enabled.
 
 See [the staged plan](../plans/memento-signal-mcp.md) for capability groups,

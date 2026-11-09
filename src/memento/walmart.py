@@ -3,12 +3,14 @@ from __future__ import annotations
 import json
 from functools import lru_cache
 from pathlib import Path
+from typing import cast
 from zoneinfo import available_timezones
 
 import duckdb
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from .duckdb_utils import fetchone_required
 from .models import SourceInventory, ValidationResult
 
 
@@ -44,10 +46,10 @@ SOURCE_TYPES = {
     "long_rng_store_dmd_frcst": ["INTEGER","VARCHAR","TINYINT","INTEGER","BIGINT","INTEGER","DOUBLE"],
 }
 
-# Retain the already-published V1 fixture/legacy observable contract while accepting
-# the narrower PSP physical integer widths used by the Miro Brand A releases. These
-# are two pinned schemas, not general implicit numeric coercion.
-LEGACY_SOURCE_TYPES = {
+# Accept the two explicitly supported physical schemas: fixture-width integers and
+# the narrower PSP integer widths used by the Miro Brand A releases. This is not
+# general implicit numeric coercion.
+FIXTURE_SOURCE_TYPES = {
     "calendar_dim": ["DATE","VARCHAR","INTEGER","INTEGER","VARCHAR","INTEGER","VARCHAR","INTEGER","INTEGER","INTEGER","INTEGER","INTEGER","INTEGER","INTEGER","INTEGER","INTEGER","INTEGER","INTEGER","DATE","DATE","INTEGER"],
     "store_dim": ["INTEGER","VARCHAR","INTEGER","VARCHAR","VARCHAR","VARCHAR","VARCHAR","VARCHAR","VARCHAR","VARCHAR","VARCHAR","VARCHAR","VARCHAR","DOUBLE","DOUBLE","INTEGER","VARCHAR","INTEGER","VARCHAR","VARCHAR","VARCHAR"],
     "omni_item_dimensions": ["INTEGER","BIGINT","VARCHAR","VARCHAR","VARCHAR","VARCHAR","INTEGER","VARCHAR","INTEGER","VARCHAR","INTEGER","VARCHAR","INTEGER","VARCHAR","VARCHAR","VARCHAR","DATE","BOOLEAN","VARCHAR","DOUBLE","VARCHAR","VARCHAR"],
@@ -118,7 +120,8 @@ def invalid_iana_timezone_row_count(
 
 def validate_source_data(con: duckdb.DuckDBPyConnection, inventory: SourceInventory) -> list[ValidationResult]:
     out: list[ValidationResult] = []
-    declared = {d["dataset_name"]: d for d in inventory.manifest["datasets"]}
+    datasets = cast(list[dict[str, object]], inventory.manifest["datasets"])
+    declared = {str(d["dataset_name"]): d for d in datasets}
     schemas_valid = True
     for name, expected_columns in SOURCE_COLUMNS.items():
         scan = _scan_sql(inventory, name)
@@ -126,18 +129,18 @@ def validate_source_data(con: duckdb.DuckDBPyConnection, inventory: SourceInvent
             desc = con.execute(f"DESCRIBE SELECT * FROM {scan}").fetchall()
             schema = [(row[0], row[1]) for row in desc]
             expected_schema = list(zip(expected_columns, SOURCE_TYPES[name], strict=True))
-            legacy_schema = list(zip(expected_columns, LEGACY_SOURCE_TYPES[name], strict=True))
-            schema_ok = schema in (expected_schema, legacy_schema)
+            fixture_schema = list(zip(expected_columns, FIXTURE_SOURCE_TYPES[name], strict=True))
+            schema_ok = schema in (expected_schema, fixture_schema)
             out.append(ValidationResult("SRC_SCHEMA_EXACT", "PASS" if schema_ok else "FAIL", name, 0 if schema_ok else 1, "exact supported physical column and type contract"))
             if not schema_ok:
                 schemas_valid = False
                 continue
-            count = con.execute(f"SELECT count(*) FROM {scan}").fetchone()[0]
+            count = fetchone_required(con.execute(f"SELECT count(*) FROM {scan}"))[0]
             out.append(ValidationResult("SRC_ROW_COUNT", "PASS" if count == declared[name]["row_count"] else "FAIL", name, 0 if count == declared[name]["row_count"] else 1, "physical row count reconciles"))
             pk = ",".join(PRIMARY_KEYS[name])
-            dupes = con.execute(f"SELECT count(*)-count(DISTINCT ({pk})) FROM {scan}").fetchone()[0]
+            dupes = fetchone_required(con.execute(f"SELECT count(*)-count(DISTINCT ({pk})) FROM {scan}"))[0]
             out.append(ValidationResult("SRC_PRIMARY_KEY", "PASS" if dupes == 0 else "FAIL", name, int(dupes), "primary key unique"))
-            nulls = con.execute("SELECT count(*) FROM (SELECT * FROM " + scan + ") t WHERE " + " OR ".join(f'"{c}" IS NULL' for c in expected_columns)).fetchone()[0]
+            nulls = fetchone_required(con.execute("SELECT count(*) FROM (SELECT * FROM " + scan + ") t WHERE " + " OR ".join(f'"{c}" IS NULL' for c in expected_columns)))[0]
             out.append(ValidationResult("SRC_REQUIRED_NULL", "PASS" if nulls == 0 else "FAIL", name, int(nulls), "required values non-null"))
         except duckdb.Error:
             schemas_valid = False
@@ -153,7 +156,7 @@ def validate_source_data(con: duckdb.DuckDBPyConnection, inventory: SourceInvent
         ("SRC_FORECAST_DOMAIN", f"SELECT count(*) FROM {_scan_sql(inventory,'long_rng_store_dmd_frcst')} WHERE op_cmpny_cd <> 0 OR geo_region_cd <> 'US' OR NOT isfinite(final_fcst_each_qty) OR final_fcst_each_qty < 0 OR final_fcst_each_qty >= 1e14 OR fcst_wm_yr_wk_nbr >= wm_yr_wk_nbr OR fcst_wm_yr_wk_nbr%100 NOT BETWEEN 1 AND 53", "long_rng_store_dmd_frcst"),
     ]
     for rule, sql, dataset in checks:
-        count = con.execute(sql).fetchone()[0]
+        count = fetchone_required(con.execute(sql))[0]
         out.append(ValidationResult(rule, "PASS" if count == 0 else "FAIL", dataset, int(count), "source semantic contract"))
     timezone_count = invalid_iana_timezone_row_count(
         con, _scan_sql(inventory, "store_dim"), "tz_nm"
@@ -168,9 +171,9 @@ def validate_source_data(con: duckdb.DuckDBPyConnection, inventory: SourceInvent
         )
     )
     product_scan = _scan_sql(inventory, "omni_item_dimensions")
-    upc_duplicates = con.execute(
-        f"SELECT count(*)-count(DISTINCT upc_nbr) FROM {product_scan}"
-    ).fetchone()[0]
+    upc_duplicates = fetchone_required(
+        con.execute(f"SELECT count(*)-count(DISTINCT upc_nbr) FROM {product_scan}")
+    )[0]
     out.append(
         ValidationResult(
             "SRC_UPC_UNIQUE",
@@ -185,11 +188,11 @@ def validate_source_data(con: duckdb.DuckDBPyConnection, inventory: SourceInvent
     for name, date_col, week_col in (("store_sales","bus_dt","wm_yr_wk_nbr"),("store_invt","bus_dt","wm_yr_wk_nbr")):
         fact = _scan_sql(inventory, name)
         sql = f"SELECT count(*) FROM {fact} f LEFT JOIN {cal} c ON f.{date_col}=c.cal_dt AND f.{week_col}=c.wm_yr_wk_nbr LEFT JOIN {loc} l ON f.store_nbr=l.store_nbr AND f.op_cmpny_cd=l.op_cmpny_cd LEFT JOIN {prod} p ON f.wm_item_nbr=p.wm_item_nbr AND f.op_cmpny_cd=p.op_cmpny_cd WHERE c.cal_dt IS NULL OR l.store_nbr IS NULL OR p.wm_item_nbr IS NULL"
-        count = con.execute(sql).fetchone()[0]
+        count = fetchone_required(con.execute(sql))[0]
         out.append(ValidationResult("SRC_REFERENCES", "PASS" if count == 0 else "FAIL", name, int(count), "dimension references resolve"))
     fact = _scan_sql(inventory, "long_rng_store_dmd_frcst")
     sql = f"SELECT count(*) FROM {fact} f LEFT JOIN (SELECT DISTINCT wm_yr_wk_nbr FROM {cal}) tc ON f.wm_yr_wk_nbr=tc.wm_yr_wk_nbr LEFT JOIN {loc} l ON f.store_nbr=l.store_nbr AND f.op_cmpny_cd=l.op_cmpny_cd LEFT JOIN {prod} p ON f.wm_item_nbr=p.wm_item_nbr AND f.op_cmpny_cd=p.op_cmpny_cd WHERE tc.wm_yr_wk_nbr IS NULL OR l.store_nbr IS NULL OR p.wm_item_nbr IS NULL"
-    count = con.execute(sql).fetchone()[0]
+    count = fetchone_required(con.execute(sql))[0]
     out.append(ValidationResult("SRC_REFERENCES", "PASS" if count == 0 else "FAIL", "long_rng_store_dmd_frcst", int(count), "dimension references resolve"))
     return out
 

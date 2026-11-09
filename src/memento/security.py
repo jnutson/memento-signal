@@ -83,6 +83,7 @@ class ServingSecurity:
         self.verifier: AccessVerifier | None = None
         self.tenant_id: str | None = None
         self.slots = threading.BoundedSemaphore(4)
+        self.admission = threading.BoundedSemaphore(16)
         self.lock = threading.Lock()
         self.window = 0
         self.requests = 0

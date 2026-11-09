@@ -1,12 +1,12 @@
 {
   "version": 1,
-  "tenant_id": "customer-example",
+  "tenant_id": "craftmix",
   "issuer": "https://replace-team.cloudflareaccess.com",
-  "audience": "REPLACE_WITH_ACCESS_APPLICATION_AUD",
+  "audience": "REPLACE_WITH_APPROVED_ACCESS_AUDIENCE",
   "members": {},
   "classification": "confidential_customer",
   "manifests": {
     "canonical/mds_REPLACE/manifest.json": "REPLACE_WITH_REVIEWED_SHA256",
-    "signals/mss_REPLACE/manifest.json": "REPLACE_WITH_REVIEWED_SHA256"
+    "metrics/met_REPLACE/manifest.json": "REPLACE_WITH_REVIEWED_SHA256"
   }
 }

@@ -7,6 +7,7 @@ import re
 import stat
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
+from typing import NoReturn
 
 from .models import IngestionFailure, SourceFile, SourceInventory, ValidationResult
 
@@ -45,7 +46,7 @@ def dataset_tree_sha256(files: list[SourceFile], dataset: str) -> str:
     return digest.hexdigest()
 
 
-def _fail(rule: str, summary: str, dataset: str | None = None, count: int = 1) -> None:
+def _fail(rule: str, summary: str, dataset: str | None = None, count: int = 1) -> NoReturn:
     raise IngestionFailure("source_validation", [ValidationResult(rule, "FAIL", dataset, count, summary)])
 
 

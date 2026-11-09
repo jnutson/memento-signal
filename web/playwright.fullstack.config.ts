@@ -11,14 +11,15 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: "env PYTHONPATH=.. ../.venv/bin/python ../tests/e2e/serve_attention_fixture.py --port 8100",
+      command:
+        "../.venv/bin/python ../tests/e2e/serve_attention_fixture.py --port 8100",
       url: `${apiOrigin}/healthz`,
       reuseExistingServer: false,
       timeout: 120_000,
     },
     {
       command: `env MEMENTO_API_ORIGIN=${apiOrigin} npm run dev -- --port 3100`,
-      url: `${webOrigin}/report`,
+      url: `${webOrigin}/signal`,
       reuseExistingServer: false,
       timeout: 120_000,
     },
