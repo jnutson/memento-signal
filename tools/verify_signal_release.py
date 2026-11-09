@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from decimal import Decimal
 from pathlib import Path
 
 import duckdb
@@ -17,6 +18,7 @@ from memento.manifest import sha256_file
 from memento.serving import SignalStore
 from memento.signal_publication import publish_signal_set
 from memento.signal_ranking import rank_signal_candidates
+from memento.signal_contract import URGENCY_POLICY_VERSION
 
 
 def verify(data_root: Path) -> dict[str, object]:
@@ -34,7 +36,22 @@ def verify(data_root: Path) -> dict[str, object]:
     assert {kind: sum(row["signal_type"] == kind for row in rows) for kind in counts} == counts
     rank_fields = ("impact_score", "rank_score", "signal_type_rank_position", "overall_rank_position", "is_overall_top_10")
     original = {str(row["signal_id"]): tuple(row[key] for key in rank_fields) for row in rows}
-    ranked = rank_signal_candidates(rows)
+    urgency_policy = configuration.get("priority_policy") == URGENCY_POLICY_VERSION
+    if urgency_policy:
+        contexts = {row["signal_id"]: json.loads(row["context"]) for row in con.execute("SELECT * FROM read_parquet(?)", [str(release / "supply_context.parquet")]).to_arrow_table().to_pylist()} if configuration.get("supply_projection_version") else {}
+        for row in rows:
+            actions = [action for action in contexts.get(row["signal_id"], {}).get("actions", []) if action["feasibility"] != "not_applicable"]
+            action = min(actions, key=lambda option: (option["conservative_days"], option["action"])) if actions else None
+            lead = action["conservative_days"] if action else row["minimum_reaction_days"]
+            slack = row["days_until_material_impact"] - lead
+            expected_urgency = max(Decimal(0), min(Decimal(1), Decimal(1) - Decimal(slack) / 28)).quantize(Decimal(".000001"))
+            assert row["decision_lead_time_days"] == lead and row["decision_slack_days"] == slack
+            assert row["urgency_score"] == expected_urgency
+            assert row["urgency_action"] == (action["action"] if action else "review_and_replan")
+            assert row["urgency_basis"] == ("assumed_conservative_action" if action else "declared_review_allowance")
+            expected_confidence = (row["forecast_quality"] * row["data_completeness"] * row["stability_score"]).quantize(Decimal(".000001"))
+            assert abs(row["confidence_score"] - expected_confidence) <= Decimal(".000001")
+    ranked = rank_signal_candidates(rows, urgency_policy=urgency_policy)
     assert all(original[str(row["signal_id"])] == tuple(row[key] for key in rank_fields) for row in ranked)
     # Every candidate has the contracted evidence count, with no orphan evidence.
     evidence_result = con.execute("""WITH evidence AS (

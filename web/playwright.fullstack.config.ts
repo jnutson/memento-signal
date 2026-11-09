@@ -11,7 +11,8 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: "../.venv/bin/python ../tests/e2e/serve_attention_fixture.py --port 8100",
+      command:
+        "../.venv/bin/python ../tests/e2e/serve_attention_fixture.py --port 8100",
       url: `${apiOrigin}/healthz`,
       reuseExistingServer: false,
       timeout: 120_000,

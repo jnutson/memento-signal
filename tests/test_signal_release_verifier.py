@@ -3,14 +3,14 @@ from pathlib import Path
 import shutil
 
 from memento.signals import run_signals
-from test_prediction_pipeline import _canonical_fixture
+from canonical_fixture import canonical_fixture
 from tools.verify_signal_release import verify
 
 
 def test_release_verifier_checks_real_api_and_distinguishes_publication_replay(tmp_path: Path):
     source = tmp_path / "source"
     source.mkdir()
-    fixture = _canonical_fixture(source)
+    fixture = canonical_fixture(source)
     root = tmp_path / "data"
     canonical = root / "canonical" / "mds_fixture"
     canonical.parent.mkdir(parents=True)

@@ -28,5 +28,10 @@ Before considering a change complete:
 4. Confirm generated data, local databases, Parquet files, and secrets remain ignored.
 5. Document any check that could not be run.
 
+Dependency audits distinguish shipped runtime packages from local and CI tooling.
+Never suppress a runtime advisory. A development-only exception must be narrowly
+listed, justified, and time-bounded as described in
+`docs/architecture/dependency-security.md`.
+
 Reviews prioritize correctness, accepted intent, data safety, reproducibility, and
 maintainability. Findings should describe a concrete consequence, not a preference.

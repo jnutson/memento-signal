@@ -1,25 +1,29 @@
-# Memento Attention web app
+# Memento retail web app
 
-This is the narrow Attention-only product surface for the deterministic OOS MVP. It
-contains the ranked queue, interactive Impact/Reaction/Confidence scene, prediction
-detail, and evidence-backed planning context. It deliberately excludes recommendations,
-editable scenarios, queue mutation, and the supplied Overview, Forecast, Plan, and
-Reports panes.
+The Next.js application has three product pages:
+
+- `/monday` — briefing from the current published top ten
+- `/attention` — ranked feed, spatial graph, and release-bound investigation
+- `/reports` — release coverage, economics by basis, and lineage
+
+`/signal` redirects to `/attention` for bookmark compatibility. It does not expose a
+separate application or data contract.
+
+The UI reads only `/api/signals` endpoints. Python response models and frontend Zod
+schemas independently reject malformed payloads before data reaches presentation code.
+Filters narrow the published overall top ten without reranking it.
+
+Investigation artifacts support availability risk, demand acceleration, demand
+deceleration, and inventory excess. Missing or invalid artifacts retain the validated
+calculation evidence and never substitute sample data.
 
 ```bash
 npm install
 npm run dev
 ```
 
-The default API origin is `http://127.0.0.1:8000`. Set `MEMENTO_API_ORIGIN` before
-starting Next.js to use another loopback port. API contracts live in
-`lib/attention/schema.ts`; those Zod schemas are the frontend runtime source of truth and
-their TypeScript types are inferred directly.
+The default API origin is `http://127.0.0.1:8000`. Override it with
+`MEMENTO_API_ORIGIN` when using another loopback port.
 
-## End-to-end verification
-
-`npm run test:e2e` runs the fast browser workflow against controlled route fixtures.
-`npm run test:e2e:fullstack` publishes a temporary synthetic release and launches the
-real Python API and Next.js application before driving the same Attention and planning
-workflow. The full-stack test requires the repository `.venv` with development
-dependencies installed and does not read or write the external Synthetic Data project.
+Verification commands are `npm run typecheck`, `npm run lint`, `npm test`,
+`npm run build`, `npm run test:e2e`, and `npm run test:e2e:fullstack`.

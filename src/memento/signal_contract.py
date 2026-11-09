@@ -15,6 +15,8 @@ SIGNAL_CONTRACT_VERSION = "memento-signal-metrics-v1.0.0"
 SIGNAL_PUBLICATION_VERSION = "memento-signal-publication-v1"
 SIGNAL_RANKER_VERSION = "memento-signal-ranker-v1"
 SIGNAL_TYPE_ORDER = {"availability": 0, "demand_momentum": 1, "inventory_imbalance": 2}
+URGENCY_POLICY_VERSION = "deadline-urgency-v1"
+URGENCY_RANKER_VERSION = "memento-signal-urgency-ranker-v2"
 
 
 class Observation(TypedDict):
@@ -66,6 +68,14 @@ EVIDENCE_SCHEMA = pa.schema([
     ("opening_units", pa.decimal128(20, 6)), ("ending_units", pa.decimal128(20, 6)),
     ("lost_units", pa.decimal128(20, 6)), ("target_units", pa.decimal128(20, 6)),
 ])
+
+# Additive, nullable fields keep historical signal releases readable without rewriting them.
+PRIORITY_FIELDS = [
+    ("urgency_score", pa.decimal128(9, 6)),
+    ("decision_slack_days", pa.int32()), ("decision_lead_time_days", pa.int32()),
+    ("urgency_basis", pa.string()), ("urgency_action", pa.string()),
+]
+PRIORITY_SCHEMA = pa.schema([*SIGNAL_SCHEMA, *[pa.field(name, kind) for name, kind in PRIORITY_FIELDS]])
 
 
 @dataclass

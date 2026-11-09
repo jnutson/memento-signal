@@ -7,6 +7,12 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: ["./tests/setup.ts"],
-    exclude: ["tests/e2e/**", "tests/fullstack/**", "node_modules/**", ".next/**"],
+    exclude: [
+      "tests/e2e/**",
+      "tests/fullstack/**",
+      "tests/connected/**",
+      "node_modules/**",
+      ".next/**",
+    ],
   },
 });
